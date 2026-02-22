@@ -3,7 +3,7 @@ Cấu hình selectors cho automation PNJ Thần Tài.
 """
 
 # URL trang chính
-BASE_URL = "https://thantai.pnj.com.vn/?utm_type=roadshow&utm_source=HCM&utm_medium=roadshow&utm_content=HCM_roadshow_HO"
+BASE_URL = "https://thantai.pnj.com.vn?utm_type=roadshow&utm_source=DNB&utm_medium=roadshow&utm_content=DNB_roadshow_HO"
 BASE_ORIGIN = "https://thantai.pnj.com.vn"
 
 # Các selector - dựa trên HTML thực tế

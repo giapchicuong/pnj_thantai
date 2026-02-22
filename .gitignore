@@ -1,1 +1,6 @@
 Miniconda3*.sh
+
+# File SĐT lớn - không đẩy lên GitHub (chỉ giữ phones.txt mẫu)
+phones_*.txt
+phones_all.txt
+phones_200k.txt

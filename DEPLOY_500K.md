@@ -9,6 +9,18 @@
 | Lượt/SĐT | 3 |
 | **Tổng SĐT cần** | **~167.000** |
 
+## Setup 35 instance (phones_1 .. phones_35)
+
+| Instance | File | SĐT | Ghi chú |
+|----------|------|-----|---------|
+| 1–8 | phones_1..8.txt | ~25.000/instance | Đã có sẵn |
+| 9–35 | phones_9..35.txt | ~7.400/instance | Tạo từ 200k: `python split_phones.py 27 phones_200k.txt 9` |
+
+**Copy lên instance mới (9–35):**
+1. Chỉnh IP trong `scp_phones_9_to_35.sh`
+2. Chạy: `bash scp_phones_9_to_35.sh`
+3. Trên mỗi instance: deploy (nếu chưa) → `cd ~/pnj_thantai && bash start_pnj.sh`
+
 ## Cấu hình instance
 
 - **Mỗi instance:** 16GB RAM, 5 workers
