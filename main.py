@@ -571,6 +571,41 @@ def run_worker(
                     print(f"[W{worker_id}] [!] Bỏ qua {phone} sau {MAX_RETRY_PER_PHONE} lần thất bại.")
                     i += 1
                     break
+                except (Urllib3ProtocolError, RemoteDisconnected) as e:
+                    print(f"[W{worker_id}] [!] Chrome connection lỗi ({type(e).__name__}), tạo lại driver...")
+                    new_driver = None
+                    for recreate_attempt in range(3):
+                        try:
+                            if driver:
+                                try:
+                                    driver.quit()
+                                except Exception:
+                                    pass
+                                driver = None
+                            new_driver = _create_driver(headless=headless)
+                            if USE_UNDETECTED:
+                                time.sleep(3)
+                            _safe_get_url(new_driver, BASE_URL)
+                            time.sleep(2)
+                            _hide_video_overlay(new_driver)
+                            _log_cloudflare_status(new_driver, worker_id)
+                            driver = new_driver
+                            retry_count += 1
+                            if retry_count <= MAX_RETRY_PER_PHONE:
+                                time.sleep(2)
+                            break
+                        except Exception as init_err:
+                            print(f"[W{worker_id}] [!] Không tạo lại được driver ({recreate_attempt + 1}/3): {init_err}")
+                            if recreate_attempt < 2:
+                                time.sleep(8)
+                    if driver is None:
+                        retry_count = MAX_RETRY_PER_PHONE + 1
+                    if retry_count > MAX_RETRY_PER_PHONE:
+                        if not_completed_path and not_completed_lock is not None:
+                            with not_completed_lock:
+                                Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
+                        i += 1
+                        break
                 except (TimeoutException, NoSuchWindowException) as e:
                     is_window_gone = isinstance(e, NoSuchWindowException)
                     if is_window_gone:
@@ -616,6 +651,7 @@ def run_worker(
                         or "RemoteDisconnected" in err_str
                         or "Remote end closed" in err_str
                         or "Connection aborted" in err_str
+                        or "ProtocolError" in err_str
                     )
                     if is_connection_lost:
                         print(f"[W{worker_id}] [!] Chrome đã thoát, tạo lại driver...")
