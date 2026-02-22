@@ -506,11 +506,15 @@ def run_worker(
                 except Exception:
                     pass
                 driver = None
-            if attempt < max_init_retries - 1 and (
-                "Unable to obtain" in str(e) or "not a valid file" in str(e)
-                or "unexpectedly exited" in str(e) or "Can not connect to the Service" in str(e)
-                or "No such file" in str(e) or isinstance(e, FileNotFoundError)
-            ):
+            err_str = str(e)
+            is_retryable_init = (
+                "Unable to obtain" in err_str or "not a valid file" in err_str
+                or "unexpectedly exited" in err_str or "Can not connect to the Service" in err_str
+                or "No such file" in err_str or "Remote end closed connection" in err_str
+                or "Connection aborted" in err_str or "RemoteDisconnected" in err_str
+                or "ProtocolError" in err_str or isinstance(e, FileNotFoundError)
+            )
+            if attempt < max_init_retries - 1 and is_retryable_init:
                 print(f"[W{worker_id}] [!] Driver lỗi, thử lại ({attempt + 1}/{max_init_retries})...")
                 time.sleep(8)
                 continue
@@ -678,7 +682,7 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
                 chunks.append([])
             chunks = chunks[:workers]
 
-            stagger_delay = 5.0 if USE_UNDETECTED and workers >= 4 else (3.0 if workers > 2 else 1.5)
+            stagger_delay = 8.0 if workers >= 4 else (6.0 if workers >= 2 else 0)
             print(f"[*] Chạy {workers} luồng song song" + (f" (stagger {stagger_delay}s)" if stagger_delay else "") + "...")
 
             manager = Manager()
