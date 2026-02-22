@@ -5,6 +5,7 @@ Luồng: Chưa mua hàng -> Nhập SĐT + Captcha -> Tích Lộc Ngay -> Quay 3 
 Hỗ trợ chạy nhiều luồng song song: python main.py --workers 10
 """
 import argparse
+import os
 import threading
 import time
 import base64
@@ -396,9 +397,14 @@ def _create_driver(headless: bool = False):
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-software-rasterizer")
         if LOW_MEMORY_MODE or headless:
             options.add_argument("--headless=new")
-        driver = uc.Chrome(options=options, version_main=145)
+        kwargs = {"options": options, "version_main": 145}
+        if os.path.isfile("/usr/bin/google-chrome"):
+            kwargs["browser_executable_path"] = "/usr/bin/google-chrome"
+        driver = uc.Chrome(**kwargs)
     else:
         options = Options()
         options.add_argument("--no-sandbox")
@@ -547,6 +553,32 @@ def run_worker(
                     i += 1
                     break
                 except (TimeoutException, NoSuchWindowException) as e:
+                    is_window_gone = isinstance(e, NoSuchWindowException)
+                    if is_window_gone:
+                        print(f"[W{worker_id}] [!] Cửa sổ đóng, tạo lại driver...")
+                        try:
+                            if driver:
+                                try:
+                                    driver.quit()
+                                except Exception:
+                                    pass
+                                driver = None
+                            driver = _create_driver(headless=headless)
+                            if USE_UNDETECTED:
+                                time.sleep(3)
+                            _safe_get_url(driver, BASE_URL)
+                            time.sleep(2)
+                            _hide_video_overlay(driver)
+                            _log_cloudflare_status(driver, worker_id)
+                        except Exception as init_err:
+                            print(f"[W{worker_id}] [!] Không tạo lại được driver: {init_err}")
+                            driver = None
+                            retry_count = MAX_RETRY_PER_PHONE + 1
+                            if not_completed_path and not_completed_lock is not None:
+                                with not_completed_lock:
+                                    Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
+                            i += 1
+                            break
                     retry_count += 1
                     print(f"[W{worker_id}] [!] Timeout load trang (retry {retry_count}/{MAX_RETRY_PER_PHONE})")
                     if retry_count > MAX_RETRY_PER_PHONE:
@@ -556,8 +588,39 @@ def run_worker(
                         i += 1
                         break
                 except Exception as e:
-                    print(f"[W{worker_id}] [!] Lỗi với {phone}: {e}")
-                    retry_count += 1
+                    err_str = str(e)
+                    is_connection_lost = (
+                        "Connection refused" in err_str
+                        or "Max retries exceeded" in err_str
+                        or "ConnectionResetError" in err_str
+                        or "Connection reset" in err_str
+                    )
+                    if is_connection_lost:
+                        print(f"[W{worker_id}] [!] Chrome đã thoát, tạo lại driver...")
+                        try:
+                            if driver:
+                                try:
+                                    driver.quit()
+                                except Exception:
+                                    pass
+                                driver = None
+                            driver = _create_driver(headless=headless)
+                            if USE_UNDETECTED:
+                                time.sleep(3)
+                            _safe_get_url(driver, BASE_URL)
+                            time.sleep(2)
+                            _hide_video_overlay(driver)
+                            _log_cloudflare_status(driver, worker_id)
+                            retry_count += 1
+                            if retry_count <= MAX_RETRY_PER_PHONE:
+                                time.sleep(2)
+                                continue
+                        except Exception as init_err:
+                            print(f"[W{worker_id}] [!] Không tạo lại được driver: {init_err}")
+                            retry_count += 1
+                    else:
+                        print(f"[W{worker_id}] [!] Lỗi với {phone}: {e}")
+                        retry_count += 1
                     if retry_count > MAX_RETRY_PER_PHONE:
                         if not_completed_path and not_completed_lock is not None:
                             with not_completed_lock:
