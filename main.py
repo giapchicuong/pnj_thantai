@@ -20,6 +20,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchWindowException, NoSuchDriverException
 from selenium.webdriver.chrome.service import Service
+
+from http.client import RemoteDisconnected
+from urllib3.exceptions import ProtocolError as Urllib3ProtocolError
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
@@ -479,7 +482,7 @@ def run_worker(
         time.sleep(stagger_sec)
 
     driver = None
-    max_init_retries = 5
+    max_init_retries = 8
     for attempt in range(max_init_retries):
         try:
             driver = _create_driver(headless=headless)
@@ -499,6 +502,18 @@ def run_worker(
                 time.sleep(8)
                 continue
             raise
+        except (Urllib3ProtocolError, RemoteDisconnected) as e:
+            if driver:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+                driver = None
+            if attempt < max_init_retries - 1:
+                print(f"[W{worker_id}] [!] Chrome connection lỗi, thử lại ({attempt + 1}/{max_init_retries})...")
+                time.sleep(12)
+                continue
+            raise RuntimeError("Không tạo được Chrome driver sau nhiều lần thử (connection error).") from e
         except Exception as e:
             if driver:
                 try:
