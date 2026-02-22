@@ -284,7 +284,11 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
     # 2. Tick điều khoản (nếu có)
     check_and_click_terms(driver)
 
-    # 3. Nhập số điện thoại
+    # 3. Đợi ô nhập SĐT xuất hiện rồi điền (form có thể load chậm)
+    for _ in range(16):
+        if find_element(driver, SELECTORS["phone_input"]):
+            break
+        time.sleep(0.5)
     if not fill_input(driver, SELECTORS["phone_input"], phone):
         print(f"{prefix} [!] Không tìm thấy ô nhập SĐT.")
         return False
@@ -597,7 +601,7 @@ def run_worker(
                         except Exception as init_err:
                             print(f"[W{worker_id}] [!] Không tạo lại được driver ({recreate_attempt + 1}/3): {init_err}")
                             if recreate_attempt < 2:
-                                time.sleep(8)
+                                time.sleep(12)
                     if driver is None:
                         retry_count = MAX_RETRY_PER_PHONE + 1
                     if retry_count > MAX_RETRY_PER_PHONE:
@@ -679,7 +683,7 @@ def run_worker(
                             except Exception as init_err:
                                 print(f"[W{worker_id}] [!] Không tạo lại được driver ({recreate_attempt + 1}/3): {init_err}")
                                 if recreate_attempt < 2:
-                                    time.sleep(8)
+                                    time.sleep(12)
                         if driver is None:
                             retry_count = MAX_RETRY_PER_PHONE + 1
                     else:

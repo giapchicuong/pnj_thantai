@@ -42,6 +42,8 @@ def solve_captcha_2captcha(image_bytes: bytes, api_key: str) -> Optional[str]:
             timeout=30,
         )
         data = r.json()
+        if not isinstance(data, dict):
+            return None
         if data.get("errorId") != 0:
             print(f"[2Captcha] Lỗi: {data.get('errorDescription', data)}")
             return None
@@ -55,8 +57,12 @@ def solve_captcha_2captcha(image_bytes: bytes, api_key: str) -> Optional[str]:
                 timeout=30,
             )
             res = r2.json()
+            if not isinstance(res, dict):
+                continue
             if res.get("status") == "ready":
-                solution = res.get("solution") or {}
+                solution = res.get("solution")
+                if not isinstance(solution, dict):
+                    solution = {}
                 return (solution.get("text") or "").strip()
             if res.get("errorId") != 0:
                 return None
