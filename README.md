@@ -120,6 +120,43 @@ options.add_argument("--headless=new")
 
 **Để dùng ddddocr (nhận captcha tốt hơn):** Dùng Python 3.11, xem [SETUP_PY311.md](SETUP_PY311.md).
 
+## Deploy lên VPS (Ubuntu 20.04, 16GB RAM)
+
+Chạy trên **mỗi instance mới** (một lệnh):
+
+```bash
+curl -sL https://raw.githubusercontent.com/giapchicuong/pnj_thantai/main/deploy_vps.sh | bash
+```
+
+Hoặc clone rồi chạy:
+
+```bash
+git clone https://github.com/giapchicuong/pnj_thantai.git
+cd pnj_thantai
+bash deploy_vps.sh
+```
+
+Script sẽ: cài Chrome, Miniconda, Python 3.11, packages, tăng /dev/shm. Sau đó:
+
+```bash
+# Thêm SĐT vào phones.txt (hoặc dùng split_phones.py để chia cho nhiều instance)
+cd ~/pnj_thantai
+bash run_16gb.sh   # 5 workers (16GB RAM)
+# Chạy nền: screen -S pnj && bash run_16gb.sh
+```
+
+**Chia SĐT cho nhiều instance:** (xem [DEPLOY_500K.md](DEPLOY_500K.md) để đạt 500k lượt)
+```bash
+python split_phones.py 8 phones_all.txt   # Tạo phones_1.txt .. phones_8.txt
+# scp phones_X.txt root@IP:~/pnj_thantai/phones.txt
+```
+
+**Chạy nền (không cần giữ terminal):**
+```bash
+bash start_pnj.sh    # Chạy trong screen, thoát SSH vẫn chạy
+# Xem log: screen -r pnj
+```
+
 ## Lưu ý
 
 - Khi chạy nhiều luồng, cần `USE_UNDETECTED = True` trong `config.py` (tránh lỗi ChromeDriver exit -9 trên macOS).
