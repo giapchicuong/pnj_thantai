@@ -285,7 +285,7 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
     check_and_click_terms(driver)
 
     # 3. Đợi ô nhập SĐT xuất hiện rồi điền (form có thể load chậm)
-    for _ in range(16):
+    for _ in range(24):
         if find_element(driver, SELECTORS["phone_input"]):
             break
         time.sleep(0.5)
@@ -460,7 +460,7 @@ def _log_cloudflare_status(driver, worker_id: int, timeout: float = 15) -> bool:
 
 
 def _safe_get_url(driver, url: str, max_retries: int = 3) -> bool:
-    """Load trang, retry khi timeout hoặc window closed. Trả về True nếu thành công."""
+    """Load trang, retry khi timeout, window closed hoặc connection error. Trả về True nếu thành công."""
     for attempt in range(max_retries):
         try:
             driver.get(url)
@@ -470,10 +470,38 @@ def _safe_get_url(driver, url: str, max_retries: int = 3) -> bool:
                 time.sleep(2)
             else:
                 raise
+        except (Urllib3ProtocolError, RemoteDisconnected):
+            if attempt < max_retries - 1:
+                time.sleep(4)
+            else:
+                raise
     return False
 
 
 def run_worker(
+    worker_id: int,
+    phones: list[str],
+    headless: bool = False,
+    stagger_sec: float = 0,
+    completed_counter=None,
+    not_completed_path: str = "not_completed.txt",
+    not_completed_lock=None,
+):
+    try:
+        _run_worker_impl(worker_id, phones, headless, stagger_sec,
+                        completed_counter, not_completed_path, not_completed_lock)
+    except (Urllib3ProtocolError, RemoteDisconnected) as e:
+        print(f"[W{worker_id}] [!] Chrome connection lỗi, thoát: {e}")
+    except Exception as e:
+        err_s = str(e)
+        if ("Connection aborted" in err_s or "RemoteDisconnected" in err_s or "ProtocolError" in err_s
+                or "connection error" in err_s.lower()):
+            print(f"[W{worker_id}] [!] Chrome connection lỗi, thoát: {e}")
+        else:
+            raise
+
+
+def _run_worker_impl(
     worker_id: int,
     phones: list[str],
     headless: bool = False,
@@ -746,7 +774,7 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
                 chunks.append([])
             chunks = chunks[:workers]
 
-            stagger_delay = 8.0 if workers >= 4 else (6.0 if workers >= 2 else 0)
+            stagger_delay = 10.0 if workers >= 4 else (8.0 if workers >= 2 else 0)
             print(f"[*] Chạy {workers} luồng song song" + (f" (stagger {stagger_delay}s)" if stagger_delay else "") + "...")
 
             manager = Manager()

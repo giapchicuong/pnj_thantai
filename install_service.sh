@@ -20,7 +20,7 @@ After=network.target
 Type=simple
 User=$OWNER
 WorkingDirectory=$SCRIPT_DIR
-ExecStart=$HOME_DIR/miniconda3/envs/pnj311/bin/python $SCRIPT_DIR/main.py --workers 3 --headless --continuous --reload-interval 60
+ExecStart=$HOME_DIR/miniconda3/envs/pnj311/bin/python $SCRIPT_DIR/main.py --workers 2 --headless --continuous --reload-interval 60
 Restart=on-failure
 RestartSec=30
 Environment=PATH=$HOME_DIR/miniconda3/bin:/usr/local/bin:/usr/bin:/bin
