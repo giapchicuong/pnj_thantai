@@ -459,7 +459,7 @@ def _log_cloudflare_status(driver, worker_id: int, timeout: float = 15) -> bool:
         return False
 
 
-def _safe_get_url(driver, url: str, max_retries: int = 3) -> bool:
+def _safe_get_url(driver, url: str, max_retries: int = 5) -> bool:
     """Load trang, retry khi timeout, window closed hoặc connection error. Trả về True nếu thành công."""
     for attempt in range(max_retries):
         try:
@@ -472,7 +472,7 @@ def _safe_get_url(driver, url: str, max_retries: int = 3) -> bool:
                 raise
         except (Urllib3ProtocolError, RemoteDisconnected):
             if attempt < max_retries - 1:
-                time.sleep(4)
+                time.sleep(6)
             else:
                 raise
     return False
@@ -512,9 +512,10 @@ def _run_worker_impl(
 ):
     if stagger_sec > 0:
         time.sleep(stagger_sec)
+    time.sleep(3)  # Đợi Chrome cũ (nếu có) thoát hẳn trước khi tạo mới
 
     driver = None
-    max_init_retries = 8
+    max_init_retries = 12
     for attempt in range(max_init_retries):
         try:
             driver = _create_driver(headless=headless)
@@ -543,7 +544,7 @@ def _run_worker_impl(
                 driver = None
             if attempt < max_init_retries - 1:
                 print(f"[W{worker_id}] [!] Chrome connection lỗi, thử lại ({attempt + 1}/{max_init_retries})...")
-                time.sleep(12)
+                time.sleep(15)
                 continue
             raise RuntimeError("Không tạo được Chrome driver sau nhiều lần thử (connection error).") from e
         except Exception as e:
