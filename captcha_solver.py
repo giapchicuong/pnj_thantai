@@ -56,7 +56,8 @@ def solve_captcha_2captcha(image_bytes: bytes, api_key: str) -> Optional[str]:
             )
             res = r2.json()
             if res.get("status") == "ready":
-                return res.get("solution", {}).get("text", "").strip()
+                solution = res.get("solution") or {}
+                return (solution.get("text") or "").strip()
             if res.get("errorId") != 0:
                 return None
         return None
