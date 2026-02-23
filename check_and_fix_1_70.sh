@@ -196,7 +196,7 @@ restart_one() {
   sshpass -p "$pass" ssh $SSH_OPTS root@$ip "cd /root/pnj_thantai && bash start_pnj.sh" 2>/dev/null || true
   sleep 8
   result=$(check_one "$ip" "$pass")
-  [ "$result" = "ok" ] && echo "  [$i] OK - đã chạy 4 workers" || echo "  [$i] Chưa chạy"
+  [ "$result" = "ok" ] && echo "  [$i] OK - đã chạy" || echo "  [$i] Chưa chạy"
 }
 
 echo "=== Kiểm tra VPS 1-70 ==="
