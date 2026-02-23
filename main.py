@@ -175,6 +175,10 @@ def fill_input(driver, selectors: list, value: str) -> bool:
             time.sleep(0.2)
             return True
         except Exception as e:
+            err_s = str(e)
+            # Re-raise connection/timeout để worker tạo lại driver
+            if "Read timed out" in err_s or "Connection" in err_s or "timed out" in err_s.lower():
+                raise
             print(f"[!] Không điền được: {e}")
     return False
 
@@ -685,6 +689,8 @@ def _run_worker_impl(
                         or "Remote end closed" in err_str
                         or "Connection aborted" in err_str
                         or "ProtocolError" in err_str
+                        or "Read timed out" in err_str
+                        or "timed out" in err_str.lower()
                     )
                     if is_connection_lost:
                         print(f"[W{worker_id}] [!] Chrome đã thoát, tạo lại driver...")
