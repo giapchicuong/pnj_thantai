@@ -49,8 +49,8 @@ SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=15 -o ServerAliveInterva
 
 check_one() {
   local ip="$1" pass="$2"
-  # Kiểm tra process python main.py (chính xác hơn screen -ls)
-  sshpass -p "$pass" ssh $SSH_OPTS root@$ip "pgrep -f 'main.py' >/dev/null && echo ok || echo no" 2>/dev/null || echo "fail"
+  # Phải có main.py VÀ process đang chạy - thiếu file = báo "chưa chạy" để fix
+  sshpass -p "$pass" ssh $SSH_OPTS root@$ip "test -f /root/pnj_thantai/main.py && pgrep -f 'main.py' >/dev/null && echo ok || echo no" 2>/dev/null || echo "fail"
 }
 
 fix_and_start_one() {
