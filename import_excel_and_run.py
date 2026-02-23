@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Import VPS từ Excel, cập nhật config và chạy 4 workers toàn bộ 1-70.
+Import VPS từ Excel, cập nhật config và chạy 3 workers toàn bộ 1-70.
 Chạy: python3 import_excel_and_run.py /path/to/file.xlsx
 """
 import xml.etree.ElementTree as ET

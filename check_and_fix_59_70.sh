@@ -2,7 +2,7 @@
 # Kiểm tra VPS 59-70: cái nào chạy, cái nào không
 # Tự động fix và start các VPS chưa chạy
 # Chạy: bash check_and_fix_59_70.sh
-#       bash check_and_fix_59_70.sh --all   (cập nhật + restart TẤT CẢ, áp dụng 4 workers)
+#       bash check_and_fix_59_70.sh --all   (cập nhật + restart TẤT CẢ, áp dụng 3 workers)
 
 FORCE_ALL=0
 [ "$1" = "--all" ] || [ "$1" = "-a" ] && FORCE_ALL=1
@@ -79,7 +79,7 @@ fix_and_start_one() {
   fi
 }
 
-# Update + restart 1 VPS (dừng cũ, git pull, start lại - áp dụng run_16gb 4 workers)
+# Update + restart 1 VPS (dừng cũ, git pull, start lại - áp dụng run_16gb 3 workers)
 restart_one() {
   local i="$1" ip="$2" pass="$3"
   echo "  [$i] Update & restart $ip..."
@@ -88,7 +88,7 @@ restart_one() {
   sshpass -p "$pass" ssh $SSH_OPTS root@$ip "cd /root/pnj_thantai && bash start_pnj.sh" 2>/dev/null || true
   sleep 8
   result=$(check_one "$ip" "$pass")
-  [ "$result" = "ok" ] && echo "  [$i] OK - đã chạy" || echo "  [$i] Chưa chạy"
+  [ "$result" = "ok" ] && echo "  [$i] OK - đã chạy 3 workers" || echo "  [$i] Chưa chạy"
 }
 
 echo "=== Kiểm tra VPS 59-70 ==="
@@ -121,7 +121,7 @@ echo "  Chưa chạy:${NOT_RUNNING:- (không có)}"
 
 if [ "$FORCE_ALL" = "1" ]; then
   echo ""
-  echo "=== [--all] Cập nhật + restart TẤT CẢ 59-70 (áp dụng 4 workers) ==="
+  echo "=== [--all] Cập nhật + restart TẤT CẢ 59-70 (áp dụng 3 workers) ==="
   for i in $(seq 59 70); do
     ip=$(get_ip "$i")
     pass=$(get_pw "$i")

@@ -21,7 +21,7 @@ sudo apt update -qq && sudo apt upgrade -y -qq
 # 2. Cài gói hệ thống
 echo "[2/8] Cài gói hệ thống..."
 sudo apt install -y -qq \
-  git wget curl unzip screen xvfb \
+  git wget curl unzip screen \
   tesseract-ocr tesseract-ocr-vie \
   libgl1-mesa-glx libglib2.0-0 libnss3 libxss1 libgbm1 libasound2
 
@@ -78,19 +78,15 @@ if [ ! -s "$INSTALL_DIR/phones.txt" ]; then
   echo "  [!] phones.txt trống - nhớ thêm SĐT vào file này!"
 fi
 
-# Tạo script chạy cho instance 16GB (1 worker ổn định)
+# Tạo script chạy cho instance 16GB (3 workers VPS 59-70)
 cat > "$INSTALL_DIR/run_16gb.sh" << 'RUNSCRIPT'
 #!/bin/bash
-# Chạy 1 worker (ổn định - tránh Chrome crash)
+# Chạy 3 workers (VPS 59-70 / 16GB RAM)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate pnj311
 cd "$SCRIPT_DIR"
-if command -v xvfb-run &>/dev/null; then
-  xvfb-run -a -s "-screen 0 1920x1080x24 +extension GLX" python -u main.py --workers 1 --headless --continuous --reload-interval 60 "$@"
-else
-  python -u main.py --workers 1 --headless --continuous --reload-interval 60 "$@"
-fi
+python main.py --workers 3 --headless --continuous --reload-interval 60 "$@"
 RUNSCRIPT
 chmod +x "$INSTALL_DIR/run_16gb.sh"
 
