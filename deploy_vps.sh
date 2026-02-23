@@ -1,6 +1,6 @@
 #!/bin/bash
 # Script deploy PNJ Thần Tài lên VPS Ubuntu 20.04
-# Dùng cho instance 16GB RAM - chạy 4 workers (toàn bộ VPS 1-70)
+# Dùng cho instance 16GB RAM - chạy 4 workers (VPS 1-70)
 # Chạy: bash deploy_vps.sh
 # Hoặc: WORKERS=5 bash deploy_vps.sh
 
@@ -78,10 +78,10 @@ if [ ! -s "$INSTALL_DIR/phones.txt" ]; then
   echo "  [!] phones.txt trống - nhớ thêm SĐT vào file này!"
 fi
 
-# Tạo script chạy cho instance 16GB (4 workers toàn bộ VPS 1-70)
+# Tạo script chạy cho instance 16GB (4 workers VPS 1-70)
 cat > "$INSTALL_DIR/run_16gb.sh" << 'RUNSCRIPT'
 #!/bin/bash
-# Chạy 4 workers (toàn bộ VPS 1-70)
+# Chạy 4 workers (16GB RAM)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate pnj311
