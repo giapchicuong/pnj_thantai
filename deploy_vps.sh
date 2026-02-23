@@ -59,15 +59,21 @@ source "$HOME/miniconda3/bin/activate" pnj311
 
 # 7. Clone repo và cài Python packages
 echo "[7/8] Clone repo và cài packages..."
-if [ ! -d "$INSTALL_DIR" ]; then
+if [ ! -d "$INSTALL_DIR/.git" ]; then
+  rm -rf "$INSTALL_DIR"
   git clone "$REPO_URL" "$INSTALL_DIR"
 else
-  cd "$INSTALL_DIR"
-  git pull origin main 2>/dev/null || true
-  cd - >/dev/null
+  (cd "$INSTALL_DIR" && git pull origin main 2>/dev/null) || true
 fi
 
 cd "$INSTALL_DIR"
+if [ ! -f "requirements.txt" ]; then
+  echo "  [!] Thiếu requirements.txt - clone lại..."
+  cd "$HOME"
+  rm -rf "$INSTALL_DIR"
+  git clone "$REPO_URL" "$INSTALL_DIR"
+  cd "$INSTALL_DIR"
+fi
 pip install -q -r requirements.txt "ddddocr>=1.5,<1.6"
 echo "  Packages đã cài."
 
