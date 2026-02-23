@@ -65,7 +65,8 @@ fix_and_start_one() {
   else
     sshpass -p "$pass" ssh $SSH_OPTS root@$ip "cd /root/pnj_thantai && git pull origin main 2>/dev/null || true" 2>/dev/null
   fi
-  # SCP phones
+  # SCP run_16gb.sh và phones
+  [ -f "run_16gb.sh" ] && sshpass -p "$pass" scp -o StrictHostKeyChecking=no "run_16gb.sh" "root@${ip}:/root/pnj_thantai/run_16gb.sh" 2>/dev/null
   [ -f "phones_$i.txt" ] && sshpass -p "$pass" scp -o StrictHostKeyChecking=no "phones_$i.txt" "root@${ip}:/root/pnj_thantai/phones.txt" 2>/dev/null
   # Start
   sshpass -p "$pass" ssh $SSH_OPTS root@$ip "cd /root/pnj_thantai && bash start_pnj.sh" 2>/dev/null || true
@@ -84,6 +85,7 @@ restart_one() {
   local i="$1" ip="$2" pass="$3"
   echo "  [$i] Update & restart $ip..."
   sshpass -p "$pass" ssh $SSH_OPTS root@$ip "pkill -f main.py 2>/dev/null; screen -S pnj -X quit 2>/dev/null; sleep 2; cd /root/pnj_thantai && git pull origin main 2>/dev/null || true" 2>/dev/null
+  [ -f "run_16gb.sh" ] && sshpass -p "$pass" scp -o StrictHostKeyChecking=no "run_16gb.sh" "root@${ip}:/root/pnj_thantai/run_16gb.sh" 2>/dev/null
   [ -f "phones_$i.txt" ] && sshpass -p "$pass" scp -o StrictHostKeyChecking=no "phones_$i.txt" "root@${ip}:/root/pnj_thantai/phones.txt" 2>/dev/null
   sshpass -p "$pass" ssh $SSH_OPTS root@$ip "cd /root/pnj_thantai && bash start_pnj.sh" 2>/dev/null || true
   sleep 8
