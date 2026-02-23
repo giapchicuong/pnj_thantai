@@ -4,3 +4,6 @@ Miniconda3*.sh
 phones_*.txt
 phones_all.txt
 phones_200k.txt
+
+# File progress - không đẩy lên (mỗi VPS lưu riêng để resume)
+completed.txt

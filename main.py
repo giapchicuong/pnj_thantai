@@ -391,13 +391,22 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
     return True
 
 
-def load_phones(path: str = "phones.txt") -> list[str]:
-    """Đọc danh sách SĐT từ file, mỗi dòng 1 số."""
+def load_phones(path: str = "phones.txt", exclude_done_path: str = "completed.txt") -> list[str]:
+    """Đọc danh sách SĐT từ file, loại trừ số đã chạy xong (completed.txt) - tránh chạy lại khi restart."""
     p = Path(path)
     if not p.exists():
         return []
     lines = p.read_text(encoding="utf-8").strip().splitlines()
-    return [line.strip() for line in lines if line.strip()]
+    phones = [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
+    done = set()
+    ep = Path(exclude_done_path)
+    if ep.exists():
+        done = set(l.strip() for l in ep.read_text(encoding="utf-8").splitlines() if l.strip())
+    if done:
+        before = len(phones)
+        phones = [ph for ph in phones if ph not in done]
+        print(f"[*] Đã bỏ qua {before - len(phones)} số đã hoàn thành (resume từ completed.txt)")
+    return phones
 
 
 def _create_driver(headless: bool = False):
@@ -490,10 +499,13 @@ def run_worker(
     completed_counter=None,
     not_completed_path: str = "not_completed.txt",
     not_completed_lock=None,
+    completed_path: str = "completed.txt",
+    completed_lock=None,
 ):
     try:
         _run_worker_impl(worker_id, phones, headless, stagger_sec,
-                        completed_counter, not_completed_path, not_completed_lock)
+                        completed_counter, not_completed_path, not_completed_lock,
+                        completed_path, completed_lock)
     except (Urllib3ProtocolError, RemoteDisconnected) as e:
         print(f"[W{worker_id}] [!] Chrome connection lỗi, thoát: {e}")
     except Exception as e:
@@ -513,9 +525,12 @@ def _run_worker_impl(
     completed_counter=None,
     not_completed_path: str = "not_completed.txt",
     not_completed_lock=None,
+    completed_path: str = "completed.txt",
+    completed_lock=None,
 ):
     if stagger_sec > 0:
         time.sleep(stagger_sec)
+    print(f"[W{worker_id}] Khởi động (stagger {stagger_sec}s)...", flush=True)
     time.sleep(3)  # Đợi Chrome cũ (nếu có) thoát hẳn trước khi tạo mới
 
     driver = None
@@ -578,6 +593,7 @@ def _run_worker_impl(
         time.sleep(2)
         _hide_video_overlay(driver)
         _log_cloudflare_status(driver, worker_id)
+        print(f"[W{worker_id}] Sẵn sàng - xử lý {len(phones)} số", flush=True)
 
         i = 0
         total = len(phones)
@@ -595,6 +611,11 @@ def _run_worker_impl(
                     if ok:
                         if completed_counter is not None:
                             completed_counter.value += 1
+                        if completed_path and completed_lock is not None:
+                            with completed_lock:
+                                Path(completed_path).open("a", encoding="utf-8").write(phone + "\n")
+                        elif completed_path:
+                            Path(completed_path).open("a", encoding="utf-8").write(phone + "\n")
                         i += 1
                         break
                     retry_count += 1
@@ -751,8 +772,10 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
     total_processed = 0
     batch_num = 0
 
+    script_dir = Path(__file__).parent
+    completed_path = script_dir / "completed.txt"
     while True:
-        phones = load_phones()
+        phones = load_phones(path=str(script_dir / "phones.txt"), exclude_done_path=str(completed_path))
         if not phones:
             if continuous:
                 print(f"[*] phones.txt rỗng. Đợi {reload_interval}s rồi load lại...")
@@ -765,11 +788,14 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
         if continuous:
             print(f"\n[*] === Batch {batch_num} ===")
         print(f"[*] Đã load {len(phones)} số điện thoại.")
-        not_completed_path = str(Path(__file__).parent / "not_completed.txt")
+        script_dir = Path(__file__).parent
+        not_completed_path = str(script_dir / "not_completed.txt")
+        completed_path = str(script_dir / "completed.txt")
+        print(f"[*] Số hoàn thành ghi vào: {completed_path} (resume khi restart)")
         print(f"[*] Số không hoàn thành sẽ ghi vào: {not_completed_path}")
 
         if workers <= 1:
-            run_worker(0, phones, headless=headless)
+            run_worker(0, phones, headless=headless, completed_path=completed_path)
         else:
             # Chia đều SĐT cho N luồng
             chunk_size = (len(phones) + workers - 1) // workers
@@ -782,11 +808,12 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
             chunks = chunks[:workers]
 
             stagger_delay = 10.0 if workers >= 4 else (8.0 if workers >= 2 else 0)
-            print(f"[*] Chạy {workers} luồng song song" + (f" (stagger {stagger_delay}s)" if stagger_delay else "") + "...")
+            print(f"[*] === Chạy {workers} luồng song song ===" + (f" (stagger {stagger_delay}s)" if stagger_delay else "") + "", flush=True)
 
             manager = Manager()
             completed_counter = manager.Value("i", 0)
             not_completed_lock = manager.Lock()
+            completed_lock = manager.Lock()
             processes = []
             for wid, chunk in enumerate(chunks):
                 if not chunk:
@@ -798,6 +825,8 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
                         "completed_counter": completed_counter,
                         "not_completed_path": not_completed_path,
                         "not_completed_lock": not_completed_lock,
+                        "completed_path": completed_path,
+                        "completed_lock": completed_lock,
                     },
                 )
                 p.start()
@@ -841,6 +870,7 @@ if __name__ == "__main__":
     parser.add_argument("--reload-interval", type=int, default=60,
                         help="Giây chờ trước khi load lại phones.txt (mặc định: 60)")
     args = parser.parse_args()
+    print(f"[*] PNJ Thần Tài - workers={args.workers}", flush=True)
     try:
         run(workers=args.workers, headless=args.headless, continuous=args.continuous,
             reload_interval=args.reload_interval)

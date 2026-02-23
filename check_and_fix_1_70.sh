@@ -2,7 +2,7 @@
 # Kiểm tra VPS 1-70: cái nào chạy, cái nào không
 # Tự động fix và start các VPS chưa chạy
 # Chạy: bash check_and_fix_1_70.sh
-#       bash check_and_fix_1_70.sh --all   (cập nhật + restart TẤT CẢ, áp dụng 5 workers)
+#       bash check_and_fix_1_70.sh --all   (cập nhật + restart TẤT CẢ, áp dụng 4 workers)
 # Dữ liệu IP/Password: import từ Excel bằng python3 import_excel_and_run.py file.xlsx
 
 FORCE_ALL=0
@@ -196,7 +196,7 @@ restart_one() {
   sshpass -p "$pass" ssh $SSH_OPTS root@$ip "cd /root/pnj_thantai && bash start_pnj.sh" 2>/dev/null || true
   sleep 8
   result=$(check_one "$ip" "$pass")
-  [ "$result" = "ok" ] && echo "  [$i] OK - đã chạy 5 workers" || echo "  [$i] Chưa chạy"
+  [ "$result" = "ok" ] && echo "  [$i] OK - đã chạy 4 workers" || echo "  [$i] Chưa chạy"
 }
 
 echo "=== Kiểm tra VPS 1-70 ==="
