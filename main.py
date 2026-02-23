@@ -22,7 +22,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchWindowException, 
 from selenium.webdriver.chrome.service import Service
 
 from http.client import RemoteDisconnected
-from urllib3.exceptions import ProtocolError as Urllib3ProtocolError
+from urllib3.exceptions import ProtocolError as Urllib3ProtocolError, MaxRetryError as Urllib3MaxRetryError
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
@@ -416,14 +416,18 @@ def _create_driver(headless: bool = False):
         options = uc.ChromeOptions()
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--window-size=1920,1080")
         options.add_argument("--disable-gpu")
         options.add_argument("--disable-software-rasterizer")
+        options.add_argument("--disable-crash-reporter")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-background-networking")
+        options.add_argument("--window-size=1920,1080")
         if LOW_MEMORY_MODE or headless:
             options.add_argument("--headless=new")
-        kwargs = {"options": options, "version_main": 145}
+        kwargs = {"options": options}
         if os.path.isfile("/usr/bin/google-chrome"):
             kwargs["browser_executable_path"] = "/usr/bin/google-chrome"
+        # Không ép version_main - để uc tự detect theo Chrome đã cài (tránh mismatch crash)
         driver = uc.Chrome(**kwargs)
     else:
         options = Options()
@@ -483,7 +487,7 @@ def _safe_get_url(driver, url: str, max_retries: int = 5) -> bool:
                 time.sleep(2)
             else:
                 raise
-        except (Urllib3ProtocolError, RemoteDisconnected):
+        except (Urllib3ProtocolError, Urllib3MaxRetryError, RemoteDisconnected):
             if attempt < max_retries - 1:
                 time.sleep(6)
             else:
@@ -506,12 +510,12 @@ def run_worker(
         _run_worker_impl(worker_id, phones, headless, stagger_sec,
                         completed_counter, not_completed_path, not_completed_lock,
                         completed_path, completed_lock)
-    except (Urllib3ProtocolError, RemoteDisconnected) as e:
+    except (Urllib3ProtocolError, Urllib3MaxRetryError, RemoteDisconnected) as e:
         print(f"[W{worker_id}] [!] Chrome connection lỗi, thoát: {e}")
     except Exception as e:
         err_s = str(e)
         if ("Connection aborted" in err_s or "RemoteDisconnected" in err_s or "ProtocolError" in err_s
-                or "connection error" in err_s.lower()):
+                or "connection error" in err_s.lower() or "Connection refused" in err_s or "Max retries" in err_s):
             print(f"[W{worker_id}] [!] Chrome connection lỗi, thoát: {e}")
         else:
             raise
@@ -554,7 +558,7 @@ def _run_worker_impl(
                 time.sleep(8)
                 continue
             raise
-        except (Urllib3ProtocolError, RemoteDisconnected) as e:
+        except (Urllib3ProtocolError, Urllib3MaxRetryError, RemoteDisconnected) as e:
             if driver:
                 try:
                     driver.quit()
@@ -562,7 +566,7 @@ def _run_worker_impl(
                     pass
                 driver = None
             if attempt < max_init_retries - 1:
-                print(f"[W{worker_id}] [!] Chrome connection lỗi, thử lại ({attempt + 1}/{max_init_retries})...")
+                print(f"[W{worker_id}] [!] Chrome connection lỗi, thử lại ({attempt + 1}/{max_init_retries})...", flush=True)
                 time.sleep(15)
                 continue
             raise RuntimeError("Không tạo được Chrome driver sau nhiều lần thử (connection error).") from e
@@ -579,7 +583,9 @@ def _run_worker_impl(
                 or "unexpectedly exited" in err_str or "Can not connect to the Service" in err_str
                 or "No such file" in err_str or "Remote end closed connection" in err_str
                 or "Connection aborted" in err_str or "RemoteDisconnected" in err_str
-                or "ProtocolError" in err_str or isinstance(e, FileNotFoundError)
+                or "ProtocolError" in err_str or "Connection refused" in err_str
+                or "Max retries exceeded" in err_str or "MaxRetryError" in err_str
+                or isinstance(e, (FileNotFoundError, Urllib3MaxRetryError))
             )
             if attempt < max_init_retries - 1 and is_retryable_init:
                 print(f"[W{worker_id}] [!] Driver lỗi, thử lại ({attempt + 1}/{max_init_retries})...")
