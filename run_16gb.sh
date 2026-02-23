@@ -1,5 +1,5 @@
 #!/bin/bash
-# Chạy 3 workers (VPS 59-70 / 16GB RAM)
+# Chạy 3 workers (ổn định cho 16GB RAM)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate pnj311

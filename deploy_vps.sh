@@ -1,6 +1,6 @@
 #!/bin/bash
 # Script deploy PNJ Thần Tài lên VPS Ubuntu 20.04
-# Dùng cho instance 16GB RAM - chạy 4 workers (VPS 1-70)
+# Dùng cho instance 16GB RAM - chạy 3 workers (ổn định)
 # Chạy: bash deploy_vps.sh
 # Hoặc: WORKERS=5 bash deploy_vps.sh
 
@@ -59,21 +59,15 @@ source "$HOME/miniconda3/bin/activate" pnj311
 
 # 7. Clone repo và cài Python packages
 echo "[7/8] Clone repo và cài packages..."
-if [ ! -d "$INSTALL_DIR/.git" ]; then
-  rm -rf "$INSTALL_DIR"
+if [ ! -d "$INSTALL_DIR" ]; then
   git clone "$REPO_URL" "$INSTALL_DIR"
 else
-  (cd "$INSTALL_DIR" && git pull origin main 2>/dev/null) || true
+  cd "$INSTALL_DIR"
+  git pull origin main 2>/dev/null || true
+  cd - >/dev/null
 fi
 
 cd "$INSTALL_DIR"
-if [ ! -f "requirements.txt" ]; then
-  echo "  [!] Thiếu requirements.txt - clone lại..."
-  cd "$HOME"
-  rm -rf "$INSTALL_DIR"
-  git clone "$REPO_URL" "$INSTALL_DIR"
-  cd "$INSTALL_DIR"
-fi
 pip install -q -r requirements.txt "ddddocr>=1.5,<1.6"
 echo "  Packages đã cài."
 
@@ -84,10 +78,10 @@ if [ ! -s "$INSTALL_DIR/phones.txt" ]; then
   echo "  [!] phones.txt trống - nhớ thêm SĐT vào file này!"
 fi
 
-# Tạo script chạy cho instance 16GB (3 workers VPS 59-70)
+# Tạo script chạy cho instance 16GB
 cat > "$INSTALL_DIR/run_16gb.sh" << 'RUNSCRIPT'
 #!/bin/bash
-# Chạy 3 workers (VPS 59-70 / 16GB RAM)
+# Chạy 3 workers (ổn định cho 16GB RAM)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate pnj311

@@ -175,10 +175,6 @@ def fill_input(driver, selectors: list, value: str) -> bool:
             time.sleep(0.2)
             return True
         except Exception as e:
-            err_s = str(e)
-            # Re-raise connection/timeout để worker tạo lại driver
-            if "Read timed out" in err_s or "Connection" in err_s or "timed out" in err_s.lower():
-                raise
             print(f"[!] Không điền được: {e}")
     return False
 
@@ -391,22 +387,13 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
     return True
 
 
-def load_phones(path: str = "phones.txt", exclude_done_path: str = "completed.txt") -> list[str]:
-    """Đọc danh sách SĐT từ file, loại trừ số đã chạy xong (completed.txt) - tránh chạy lại khi restart."""
+def load_phones(path: str = "phones.txt") -> list[str]:
+    """Đọc danh sách SĐT từ file, mỗi dòng 1 số."""
     p = Path(path)
     if not p.exists():
         return []
     lines = p.read_text(encoding="utf-8").strip().splitlines()
-    phones = [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
-    done = set()
-    ep = Path(exclude_done_path)
-    if ep.exists():
-        done = set(l.strip() for l in ep.read_text(encoding="utf-8").splitlines() if l.strip())
-    if done:
-        before = len(phones)
-        phones = [ph for ph in phones if ph not in done]
-        print(f"[*] Đã bỏ qua {before - len(phones)} số đã hoàn thành (resume từ completed.txt)")
-    return phones
+    return [line.strip() for line in lines if line.strip()]
 
 
 def _create_driver(headless: bool = False):
@@ -499,13 +486,10 @@ def run_worker(
     completed_counter=None,
     not_completed_path: str = "not_completed.txt",
     not_completed_lock=None,
-    completed_path: str = "completed.txt",
-    completed_lock=None,
 ):
     try:
         _run_worker_impl(worker_id, phones, headless, stagger_sec,
-                        completed_counter, not_completed_path, not_completed_lock,
-                        completed_path, completed_lock)
+                        completed_counter, not_completed_path, not_completed_lock)
     except (Urllib3ProtocolError, RemoteDisconnected) as e:
         print(f"[W{worker_id}] [!] Chrome connection lỗi, thoát: {e}")
     except Exception as e:
@@ -525,8 +509,6 @@ def _run_worker_impl(
     completed_counter=None,
     not_completed_path: str = "not_completed.txt",
     not_completed_lock=None,
-    completed_path: str = "completed.txt",
-    completed_lock=None,
 ):
     if stagger_sec > 0:
         time.sleep(stagger_sec)
@@ -609,11 +591,6 @@ def _run_worker_impl(
                     if ok:
                         if completed_counter is not None:
                             completed_counter.value += 1
-                        if completed_path and completed_lock is not None:
-                            with completed_lock:
-                                Path(completed_path).open("a", encoding="utf-8").write(phone + "\n")
-                        elif completed_path:
-                            Path(completed_path).open("a", encoding="utf-8").write(phone + "\n")
                         i += 1
                         break
                     retry_count += 1
@@ -708,8 +685,6 @@ def _run_worker_impl(
                         or "Remote end closed" in err_str
                         or "Connection aborted" in err_str
                         or "ProtocolError" in err_str
-                        or "Read timed out" in err_str
-                        or "timed out" in err_str.lower()
                     )
                     if is_connection_lost:
                         print(f"[W{worker_id}] [!] Chrome đã thoát, tạo lại driver...")
@@ -770,10 +745,8 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
     total_processed = 0
     batch_num = 0
 
-    script_dir = Path(__file__).parent
-    completed_path = script_dir / "completed.txt"
     while True:
-        phones = load_phones(path=str(script_dir / "phones.txt"), exclude_done_path=str(completed_path))
+        phones = load_phones()
         if not phones:
             if continuous:
                 print(f"[*] phones.txt rỗng. Đợi {reload_interval}s rồi load lại...")
@@ -786,14 +759,11 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
         if continuous:
             print(f"\n[*] === Batch {batch_num} ===")
         print(f"[*] Đã load {len(phones)} số điện thoại.")
-        script_dir = Path(__file__).parent
-        not_completed_path = str(script_dir / "not_completed.txt")
-        completed_path = str(script_dir / "completed.txt")
-        print(f"[*] Số hoàn thành ghi vào: {completed_path} (resume khi restart)")
+        not_completed_path = str(Path(__file__).parent / "not_completed.txt")
         print(f"[*] Số không hoàn thành sẽ ghi vào: {not_completed_path}")
 
         if workers <= 1:
-            run_worker(0, phones, headless=headless, completed_path=completed_path)
+            run_worker(0, phones, headless=headless)
         else:
             # Chia đều SĐT cho N luồng
             chunk_size = (len(phones) + workers - 1) // workers
@@ -811,7 +781,6 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
             manager = Manager()
             completed_counter = manager.Value("i", 0)
             not_completed_lock = manager.Lock()
-            completed_lock = manager.Lock()
             processes = []
             for wid, chunk in enumerate(chunks):
                 if not chunk:
@@ -823,8 +792,6 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
                         "completed_counter": completed_counter,
                         "not_completed_path": not_completed_path,
                         "not_completed_lock": not_completed_lock,
-                        "completed_path": completed_path,
-                        "completed_lock": completed_lock,
                     },
                 )
                 p.start()
