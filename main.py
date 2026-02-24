@@ -486,10 +486,11 @@ def run_worker(
     completed_counter=None,
     not_completed_path: str = "not_completed.txt",
     not_completed_lock=None,
+    phone_queue=None,
 ):
     try:
         _run_worker_impl(worker_id, phones, headless, stagger_sec,
-                        completed_counter, not_completed_path, not_completed_lock)
+                        completed_counter, not_completed_path, not_completed_lock, phone_queue)
     except (Urllib3ProtocolError, RemoteDisconnected) as e:
         print(f"[W{worker_id}] [!] Chrome connection lỗi, thoát: {e}")
     except Exception as e:
@@ -509,6 +510,7 @@ def _run_worker_impl(
     completed_counter=None,
     not_completed_path: str = "not_completed.txt",
     not_completed_lock=None,
+    phone_queue=None,
 ):
     if stagger_sec > 0:
         time.sleep(stagger_sec)
@@ -577,8 +579,17 @@ def _run_worker_impl(
 
         i = 0
         total = len(phones)
-        while i < total:
-            phone = phones[i]
+        processed_count = 0
+
+        while True:
+            if phone_queue is not None:
+                phone = phone_queue.get()
+                if phone is None:
+                    break
+            else:
+                if i >= total:
+                    break
+                phone = phones[i]
             retry_count = 0
 
             while retry_count <= MAX_RETRY_PER_PHONE:
@@ -591,7 +602,9 @@ def _run_worker_impl(
                     if ok:
                         if completed_counter is not None:
                             completed_counter.value += 1
-                        i += 1
+                        processed_count += 1
+                        if phone_queue is None:
+                            i += 1
                         break
                     retry_count += 1
                     if retry_count <= MAX_RETRY_PER_PHONE:
@@ -602,7 +615,9 @@ def _run_worker_impl(
                         with not_completed_lock:
                             Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
                     print(f"[W{worker_id}] [!] Bỏ qua {phone} sau {MAX_RETRY_PER_PHONE} lần thất bại.")
-                    i += 1
+                    processed_count += 1
+                    if phone_queue is None:
+                        i += 1
                     break
                 except (Urllib3ProtocolError, RemoteDisconnected) as e:
                     print(f"[W{worker_id}] [!] Chrome connection lỗi ({type(e).__name__}), tạo lại driver...")
@@ -637,7 +652,9 @@ def _run_worker_impl(
                         if not_completed_path and not_completed_lock is not None:
                             with not_completed_lock:
                                 Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
-                        i += 1
+                        processed_count += 1
+                        if phone_queue is None:
+                            i += 1
                         break
                 except (TimeoutException, NoSuchWindowException) as e:
                     is_window_gone = isinstance(e, NoSuchWindowException)
@@ -664,7 +681,9 @@ def _run_worker_impl(
                             if not_completed_path and not_completed_lock is not None:
                                 with not_completed_lock:
                                     Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
-                            i += 1
+                            processed_count += 1
+                            if phone_queue is None:
+                                i += 1
                             break
                     retry_count += 1
                     print(f"[W{worker_id}] [!] Timeout load trang (retry {retry_count}/{MAX_RETRY_PER_PHONE})")
@@ -672,7 +691,9 @@ def _run_worker_impl(
                         if not_completed_path and not_completed_lock is not None:
                             with not_completed_lock:
                                 Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
-                        i += 1
+                        processed_count += 1
+                        if phone_queue is None:
+                            i += 1
                         break
                 except Exception as e:
                     err_str = str(e)
@@ -718,15 +739,21 @@ def _run_worker_impl(
                             retry_count = MAX_RETRY_PER_PHONE + 1
                     else:
                         print(f"[W{worker_id}] [!] Lỗi với {phone}: {e}")
+                        if "'NoneType' object has no attribute 'get'" in err_str:
+                            import traceback
+                            traceback.print_exc()
                         retry_count += 1
                     if retry_count > MAX_RETRY_PER_PHONE:
                         if not_completed_path and not_completed_lock is not None:
                             with not_completed_lock:
                                 Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
-                        i += 1
+                        processed_count += 1
+                        if phone_queue is None:
+                            i += 1
                         break
 
-        print(f"[W{worker_id}] [*] Hoàn thành {total} số trong chunk.")
+        total_msg = processed_count if phone_queue is not None else total
+        print(f"[W{worker_id}] [*] Hoàn thành {total_msg} số trong chunk.")
     finally:
         if driver:
             def _do_quit():
@@ -766,33 +793,29 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
         if workers <= 1:
             run_worker(0, phones, headless=headless)
         else:
-            # Chia đều SĐT cho N luồng
-            chunk_size = (len(phones) + workers - 1) // workers
-            chunks = [
-                phones[i : i + chunk_size]
-                for i in range(0, len(phones), chunk_size)
-            ]
-            while len(chunks) < workers:
-                chunks.append([])
-            chunks = chunks[:workers]
-
+            # Queue chung: worker nào xong nhanh (kể cả lỗi) sẽ lấy số tiếp, không chờ worker chậm
             stagger_delay = 15.0 if workers >= 3 else (10.0 if workers >= 2 else 0)
-            print(f"[*] Chạy {workers} luồng song song" + (f" (stagger {stagger_delay}s)" if stagger_delay else "") + "...")
+            print(f"[*] Chạy {workers} luồng song song (queue chung)" + (f" (stagger {stagger_delay}s)" if stagger_delay else "") + "...")
 
             manager = Manager()
+            phone_queue = manager.Queue()
+            for p in phones:
+                phone_queue.put(p)
+            for _ in range(workers):
+                phone_queue.put(None)  # Sentinel: mỗi worker nhận None thì thoát
+
             completed_counter = manager.Value("i", 0)
             not_completed_lock = manager.Lock()
             processes = []
-            for wid, chunk in enumerate(chunks):
-                if not chunk:
-                    continue
+            for wid in range(workers):
                 p = Process(
                     target=run_worker,
-                    args=(wid + 1, chunk, headless, stagger_delay * wid),
+                    args=(wid + 1, [], headless, stagger_delay * wid),
                     kwargs={
                         "completed_counter": completed_counter,
                         "not_completed_path": not_completed_path,
                         "not_completed_lock": not_completed_lock,
+                        "phone_queue": phone_queue,
                     },
                 )
                 p.start()
