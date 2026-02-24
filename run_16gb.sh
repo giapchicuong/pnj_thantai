@@ -1,7 +1,7 @@
 #!/bin/bash
-# Chạy 3 workers (ổn định cho 16GB RAM)
+# Chạy 6 workers (test - tăng từ 3)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate pnj311
 cd "$SCRIPT_DIR"
-python main.py --workers 3 --headless --continuous --reload-interval 60 "$@"
+python main.py --workers 6 --headless --continuous --reload-interval 60 "$@"
