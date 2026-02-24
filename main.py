@@ -369,7 +369,7 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
             _hide_video_overlay(driver)
             if turn < 2:
                 click_element(driver, SELECTORS["tich_them_loc"])
-                time.sleep(2.5)
+                time.sleep(1.5)
             else:
                 # Lượt 3 xong: bấm Về trang chủ ngay trên popup
                 click_element(driver, SELECTORS["ve_trang_chu"])
@@ -506,18 +506,18 @@ def run_worker(
                             completed_counter, not_completed_path, not_completed_lock, phone_queue)
             break
         except (Urllib3ProtocolError, RemoteDisconnected) as e:
-            print(f"[W{worker_id}] [!] Chrome connection lỗi ({worker_attempt + 1}/{max_worker_retries}), chờ 45s rồi chạy lại...")
+            print(f"[W{worker_id}] [!] Chrome connection lỗi ({worker_attempt + 1}/{max_worker_retries}), chờ 20s rồi chạy lại...")
             if worker_attempt < max_worker_retries - 1:
-                time.sleep(45)
+                time.sleep(20)
             else:
                 print(f"[W{worker_id}] [!] Thoát sau {max_worker_retries} lần thất bại.")
         except Exception as e:
             err_s = str(e)
             if ("Connection aborted" in err_s or "RemoteDisconnected" in err_s or "ProtocolError" in err_s
                     or "connection error" in err_s.lower()):
-                print(f"[W{worker_id}] [!] Chrome connection lỗi ({worker_attempt + 1}/{max_worker_retries}), chờ 45s rồi chạy lại...")
+                print(f"[W{worker_id}] [!] Chrome connection lỗi ({worker_attempt + 1}/{max_worker_retries}), chờ 20s rồi chạy lại...")
                 if worker_attempt < max_worker_retries - 1:
-                    time.sleep(45)
+                    time.sleep(20)
                 else:
                     print(f"[W{worker_id}] [!] Thoát sau {max_worker_retries} lần thất bại.")
             else:
@@ -536,7 +536,7 @@ def _run_worker_impl(
 ):
     if stagger_sec > 0:
         time.sleep(stagger_sec)
-    time.sleep(3)  # Đợi Chrome cũ (nếu có) thoát hẳn trước khi tạo mới
+    time.sleep(1)  # Đợi Chrome cũ (nếu có) thoát hẳn trước khi tạo mới
 
     driver = None
     max_init_retries = 12
@@ -636,7 +636,7 @@ def _run_worker_impl(
                             time.sleep(8)
                             continue
                     _safe_get_url(driver, BASE_URL)
-                    time.sleep(4)  # Đợi trang + video render xong (nhiều luồng cần lâu hơn)
+                    time.sleep(2)  # Đợi trang + video render xong
                     _hide_video_overlay(driver)
 
                     ok = process_one_phone(driver, phone, worker_id=worker_id)
@@ -835,7 +835,7 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
             run_worker(0, phones, headless=headless)
         else:
             # Queue chung: worker nào xong nhanh (kể cả lỗi) sẽ lấy số tiếp, không chờ worker chậm
-            stagger_delay = 25.0 if workers >= 3 else (15.0 if workers >= 2 else 0)
+            stagger_delay = 8.0 if workers >= 3 else (5.0 if workers >= 2 else 0)
             print(f"[*] Chạy {workers} luồng song song (queue chung)" + (f" (stagger {stagger_delay}s)" if stagger_delay else "") + "...")
 
             manager = Manager()

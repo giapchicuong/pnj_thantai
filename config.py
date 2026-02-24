@@ -37,15 +37,15 @@ CHECKBOX_TERMS = ["input[type='checkbox']", ".terms-checkbox"]
 # Timeouts (giây)
 TIMEOUT_ELEMENT = 10
 TIMEOUT_PAGE_LOAD = 30
-WAIT_AFTER_CLICK = 0.5
+WAIT_AFTER_CLICK = 0.3
 IMPLICIT_WAIT = 2
 WAIT_AFTER_SPIN = 8
-WAIT_FOR_POPUP_MAX = 25
-WAIT_FOR_NEXT_SPIN = 30
+WAIT_FOR_POPUP_MAX = 15
+WAIT_FOR_NEXT_SPIN = 20
 
-NUM_WORKERS = 6
+NUM_WORKERS = 8
 SUMMARY_INTERVAL = 120
-MAX_RETRY_PER_PHONE = 3  # Retry tối đa mỗi SĐT khi lỗi (tránh loop vô hạn)
+MAX_RETRY_PER_PHONE = 1  # Retry tối đa mỗi SĐT khi lỗi (tránh loop vô hạn)
 
 # Chế độ tiết kiệm RAM. False = mở cửa sổ Chrome (ổn định hơn khi nhiều luồng)
 LOW_MEMORY_MODE = True
