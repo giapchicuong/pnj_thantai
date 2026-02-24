@@ -685,6 +685,7 @@ def _run_worker_impl(
                         or "Remote end closed" in err_str
                         or "Connection aborted" in err_str
                         or "ProtocolError" in err_str
+                        or "Read timed out" in err_str
                     )
                     if is_connection_lost:
                         print(f"[W{worker_id}] [!] Chrome đã thoát, tạo lại driver...")
