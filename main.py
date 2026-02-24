@@ -416,9 +416,14 @@ def _create_driver(headless: bool = False, worker_id: int = 0):
                 options = uc.ChromeOptions()
                 options.add_argument("--no-sandbox")
                 options.add_argument("--disable-dev-shm-usage")
-                options.add_argument("--window-size=1920,1080")
+                options.add_argument("--window-size=1280,720")
                 options.add_argument("--disable-gpu")
                 options.add_argument("--disable-software-rasterizer")
+                options.add_argument("--disable-background-networking")
+                options.add_argument("--disable-default-apps")
+                options.add_argument("--disable-sync")
+                options.add_argument("--no-first-run")
+                options.add_argument("--js-flags=--max-old-space-size=256")
                 if LOW_MEMORY_MODE or headless:
                     options.add_argument("--headless=new")
                 kwargs = {"options": options, "version_main": 145}

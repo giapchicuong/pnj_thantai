@@ -13,9 +13,10 @@ fi
 echo "[*] Khởi động PNJ trong screen (session: pnj)"
 echo "[*] Xem log: screen -r pnj"
 echo "[*] Thoát khỏi log (giữ chạy): Ctrl+A rồi D"
-echo "[*] Dừng: screen -r pnj → Ctrl+C"
+echo "[*] Dừng: screen -r pnj rồi Ctrl+C"
 echo ""
 cd "$SCRIPT_DIR"
-screen -dmS "$SESSION" bash run_16gb.sh
+# Dùng login shell để conda có trong PATH khi chạy trong screen
+screen -dmS "$SESSION" bash -l -c "cd '$SCRIPT_DIR' && bash run_16gb.sh"
 sleep 1
 screen -ls | grep pnj
