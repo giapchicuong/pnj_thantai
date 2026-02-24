@@ -5,9 +5,7 @@ Luồng: Chưa mua hàng -> Nhập SĐT + Captcha -> Tích Lộc Ngay -> Quay 3 
 Hỗ trợ chạy nhiều luồng song song: python main.py --workers 10
 """
 import argparse
-import fcntl
 import os
-import random
 import threading
 import time
 import base64
@@ -73,8 +71,6 @@ def find_element(driver, selectors: list, by_xpath_markers: tuple = ("//", "[", 
 
 def _hide_video_overlay(driver) -> None:
     """Ẩn video fullscreen chặn click."""
-    if driver is None:
-        return
     try:
         driver.execute_script("""
             document.querySelectorAll('video').forEach(v => {
@@ -270,8 +266,6 @@ def _wait_for_chua_mua_hang(driver, timeout: float = 12) -> bool:
 
 def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
     """Xử lý 1 số điện thoại: nhập SĐT, captcha, quay 3 lượt."""
-    if driver is None:
-        return False
     prefix = f"[W{worker_id}]" if worker_id else ""
     print(f"\n{prefix} [*] Đang xử lý: {phone}")
 
@@ -356,49 +350,37 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
         time.sleep(2)
         return True
 
-    # 6. Quay cho đến khi còn 0 lượt — có bao nhiêu lượt thì quay bấy nhiêu
-    turn_done = 0
-    max_spins = 20  # tránh lặp vô hạn nếu không đọc được số lượt
-    while turn_done < max_spins:
-        remaining = get_so_luot_con_lai(driver)
-        if remaining is not None and remaining == 0:
-            print(f"{prefix}     Đã quay hết lượt (0 còn lại). Hoàn thành {phone}.")
-            _hide_video_overlay(driver)
-            click_element(driver, SELECTORS["ve_trang_chu"])
-            time.sleep(2)
-            return True
-
+    # 6. Quay 3 lượt - chờ loading ẩn -> bấm quay -> chờ popup -> bấm Tích thêm lộc / Về trang chủ
+    for turn in range(3):
         if not _wait_for_spin_button(driver):
-            print(f"{prefix} [!] Không thấy nút quay (còn {remaining} lượt) sau {WAIT_FOR_NEXT_SPIN}s.")
-            return False
+            print(f"{prefix} [!] Không thấy nút quay lượt {turn + 1} sau {WAIT_FOR_NEXT_SPIN}s.")
         spin_clicked = click_element(driver, SELECTORS["tich_loc_1_luot"])
         if not spin_clicked:
             spin_clicked = click_element(driver, SELECTORS["tich_them_loc"])
         if not spin_clicked:
-            print(f"{prefix} [!] Không bấm được nút quay.")
-            return False
-
-        turn_done += 1
-        print(f"{prefix}     Quay lượt {turn_done} (còn {remaining} lượt)...")
-        _wait_loading_hide(driver, LOADING_SPIN, timeout=WAIT_FOR_POPUP_MAX)
-        _wait_for_spin_popup(driver)
-        time.sleep(0.3)
-        _hide_video_overlay(driver)
-        # Đóng popup: Tích thêm lộc (quay tiếp) hoặc Về trang chủ (nếu hết lượt)
-        clicked_next = click_element(driver, SELECTORS["tich_them_loc"])
-        if not clicked_next:
-            click_element(driver, SELECTORS["ve_trang_chu"])
-        time.sleep(1.5)
-        remaining_after = get_so_luot_con_lai(driver)
-        if remaining_after is not None:
-            print(f"{prefix}     Đã quay được lượt {turn_done} (còn {remaining_after} lượt).")
+            print(f"{prefix} [!] Không bấm được nút quay lượt {turn + 1}.")
         else:
-            print(f"{prefix}     Đã quay được lượt {turn_done}.")
+            print(f"{prefix}     Quay lượt {turn + 1}/3...")
+            _wait_loading_hide(driver, LOADING_SPIN, timeout=WAIT_FOR_POPUP_MAX)
+            _wait_for_spin_popup(driver)
+            time.sleep(0.3)
+            _hide_video_overlay(driver)
+            if turn < 2:
+                click_element(driver, SELECTORS["tich_them_loc"])
+                time.sleep(2.5)
+            else:
+                # Lượt 3 xong: bấm Về trang chủ ngay trên popup
+                click_element(driver, SELECTORS["ve_trang_chu"])
+                time.sleep(1)
+                print(f"{prefix}     Hoàn thành {phone}.")
+                return True
 
-    # Thoát vòng do max_spins — về trang chủ, coi như xong
+    # 7. Nếu chưa bấm Về trang chủ (lỡ lượt 3 không click được)
     remaining = get_so_luot_con_lai(driver)
     if remaining is not None and remaining > 0:
-        print(f"{prefix} [!] Đã quay {turn_done} lượt, còn {remaining} lượt (giới hạn {max_spins}).")
+        print(f"{prefix} [!] Còn {remaining} lượt chưa quay -> retry SĐT.")
+        return False
+
     _hide_video_overlay(driver)
     click_element(driver, SELECTORS["ve_trang_chu"])
     time.sleep(2)
@@ -414,36 +396,22 @@ def load_phones(path: str = "phones.txt") -> list[str]:
     return [line.strip() for line in lines if line.strip()]
 
 
-def _create_driver(headless: bool = False, worker_id: int = 0):
+def _create_driver(headless: bool = False):
     """Tạo Chrome driver - dùng undetected-chromedriver khi USE_UNDETECTED để né Cloudflare."""
     if USE_UNDETECTED:
         import undetected_chromedriver as uc
-        # Lock: tránh nhiều worker cùng tải/copy chromedriver → Text file busy, No such file
-        lock_path = "/tmp/pnj_uc_create.lock"
-        os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
-        with open(lock_path, "a") as lf:
-            fcntl.flock(lf.fileno(), fcntl.LOCK_EX)
-            try:
-                time.sleep(random.uniform(0, 2))  # Stagger khi đợi lock
-                options = uc.ChromeOptions()
-                options.add_argument("--no-sandbox")
-                options.add_argument("--disable-dev-shm-usage")
-                options.add_argument("--window-size=1280,720")
-                options.add_argument("--disable-gpu")
-                options.add_argument("--disable-software-rasterizer")
-                options.add_argument("--disable-background-networking")
-                options.add_argument("--disable-default-apps")
-                options.add_argument("--disable-sync")
-                options.add_argument("--no-first-run")
-                options.add_argument("--js-flags=--max-old-space-size=256")
-                if LOW_MEMORY_MODE or headless:
-                    options.add_argument("--headless=new")
-                kwargs = {"options": options, "version_main": 145}
-                if os.path.isfile("/usr/bin/google-chrome"):
-                    kwargs["browser_executable_path"] = "/usr/bin/google-chrome"
-                driver = uc.Chrome(**kwargs)
-            finally:
-                fcntl.flock(lf.fileno(), fcntl.LOCK_UN)
+        options = uc.ChromeOptions()
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-software-rasterizer")
+        if LOW_MEMORY_MODE or headless:
+            options.add_argument("--headless=new")
+        kwargs = {"options": options, "version_main": 145}
+        if os.path.isfile("/usr/bin/google-chrome"):
+            kwargs["browser_executable_path"] = "/usr/bin/google-chrome"
+        driver = uc.Chrome(**kwargs)
     else:
         options = Options()
         options.add_argument("--no-sandbox")
@@ -472,8 +440,6 @@ def _create_driver(headless: bool = False, worker_id: int = 0):
 
 def _log_cloudflare_status(driver, worker_id: int, timeout: float = 15) -> bool:
     """Chờ element trang PNJ xuất hiện, log trạng thái Cloudflare. Trả về True nếu đã vượt."""
-    if driver is None:
-        return False
     try:
         WebDriverWait(driver, timeout).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "#btChuaMuaHang, #txtSoDienThoai"))
@@ -495,8 +461,6 @@ def _log_cloudflare_status(driver, worker_id: int, timeout: float = 15) -> bool:
 
 def _safe_get_url(driver, url: str, max_retries: int = 5) -> bool:
     """Load trang, retry khi timeout, window closed hoặc connection error. Trả về True nếu thành công."""
-    if driver is None:
-        raise RuntimeError("Driver is None")
     for attempt in range(max_retries):
         try:
             driver.get(url)
@@ -522,31 +486,19 @@ def run_worker(
     completed_counter=None,
     not_completed_path: str = "not_completed.txt",
     not_completed_lock=None,
-    phone_queue=None,
 ):
-    max_worker_retries = 5  # Worker crash → chờ rồi chạy lại, không thoát ngay
-    for worker_attempt in range(max_worker_retries):
-        try:
-            _run_worker_impl(worker_id, phones, headless, stagger_sec,
-                            completed_counter, not_completed_path, not_completed_lock, phone_queue)
-            break
-        except (Urllib3ProtocolError, RemoteDisconnected) as e:
-            print(f"[W{worker_id}] [!] Chrome connection lỗi ({worker_attempt + 1}/{max_worker_retries}), chờ 20s rồi chạy lại...")
-            if worker_attempt < max_worker_retries - 1:
-                time.sleep(20)
-            else:
-                print(f"[W{worker_id}] [!] Thoát sau {max_worker_retries} lần thất bại.")
-        except Exception as e:
-            err_s = str(e)
-            if ("Connection aborted" in err_s or "RemoteDisconnected" in err_s or "ProtocolError" in err_s
-                    or "connection error" in err_s.lower()):
-                print(f"[W{worker_id}] [!] Chrome connection lỗi ({worker_attempt + 1}/{max_worker_retries}), chờ 20s rồi chạy lại...")
-                if worker_attempt < max_worker_retries - 1:
-                    time.sleep(20)
-                else:
-                    print(f"[W{worker_id}] [!] Thoát sau {max_worker_retries} lần thất bại.")
-            else:
-                raise
+    try:
+        _run_worker_impl(worker_id, phones, headless, stagger_sec,
+                        completed_counter, not_completed_path, not_completed_lock)
+    except (Urllib3ProtocolError, RemoteDisconnected) as e:
+        print(f"[W{worker_id}] [!] Chrome connection lỗi, thoát: {e}")
+    except Exception as e:
+        err_s = str(e)
+        if ("Connection aborted" in err_s or "RemoteDisconnected" in err_s or "ProtocolError" in err_s
+                or "connection error" in err_s.lower()):
+            print(f"[W{worker_id}] [!] Chrome connection lỗi, thoát: {e}")
+        else:
+            raise
 
 
 def _run_worker_impl(
@@ -557,17 +509,16 @@ def _run_worker_impl(
     completed_counter=None,
     not_completed_path: str = "not_completed.txt",
     not_completed_lock=None,
-    phone_queue=None,
 ):
     if stagger_sec > 0:
         time.sleep(stagger_sec)
-    time.sleep(1)  # Đợi Chrome cũ (nếu có) thoát hẳn trước khi tạo mới
+    time.sleep(3)  # Đợi Chrome cũ (nếu có) thoát hẳn trước khi tạo mới
 
     driver = None
     max_init_retries = 12
     for attempt in range(max_init_retries):
         try:
-            driver = _create_driver(headless=headless, worker_id=worker_id)
+            driver = _create_driver(headless=headless)
             if USE_UNDETECTED:
                 time.sleep(3)  # Cho Chrome ổn định trước khi load trang
             _safe_get_url(driver, BASE_URL)
@@ -626,55 +577,21 @@ def _run_worker_impl(
 
         i = 0
         total = len(phones)
-        processed_count = 0
-        worker_exit_driver_dead = False  # Thoát hẳn worker khi không tạo lại được driver
-
-        while True:
-            if worker_exit_driver_dead:
-                print(f"[W{worker_id}] [!] Thoát worker do không tạo lại được driver.")
-                break
-            if phone_queue is not None:
-                phone = phone_queue.get()
-                if phone is None:
-                    break
-            else:
-                if i >= total:
-                    break
-                phone = phones[i]
+        while i < total:
+            phone = phones[i]
             retry_count = 0
 
             while retry_count <= MAX_RETRY_PER_PHONE:
                 try:
-                    if driver is None:
-                        try:
-                            driver = _create_driver(headless=headless, worker_id=worker_id)
-                            if USE_UNDETECTED:
-                                time.sleep(3)
-                            _log_cloudflare_status(driver, worker_id)
-                        except Exception as init_err:
-                            print(f"[W{worker_id}] [!] Không tạo lại driver: {init_err}")
-                            retry_count += 1
-                            if retry_count > MAX_RETRY_PER_PHONE:
-                                if not_completed_path and not_completed_lock is not None:
-                                    with not_completed_lock:
-                                        Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
-                                processed_count += 1
-                                if phone_queue is None:
-                                    i += 1
-                                break
-                            time.sleep(8)
-                            continue
                     _safe_get_url(driver, BASE_URL)
-                    time.sleep(2)  # Đợi trang + video render xong
+                    time.sleep(4)  # Đợi trang + video render xong (nhiều luồng cần lâu hơn)
                     _hide_video_overlay(driver)
 
                     ok = process_one_phone(driver, phone, worker_id=worker_id)
                     if ok:
                         if completed_counter is not None:
                             completed_counter.value += 1
-                        processed_count += 1
-                        if phone_queue is None:
-                            i += 1
+                        i += 1
                         break
                     retry_count += 1
                     if retry_count <= MAX_RETRY_PER_PHONE:
@@ -685,9 +602,7 @@ def _run_worker_impl(
                         with not_completed_lock:
                             Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
                     print(f"[W{worker_id}] [!] Bỏ qua {phone} sau {MAX_RETRY_PER_PHONE} lần thất bại.")
-                    processed_count += 1
-                    if phone_queue is None:
-                        i += 1
+                    i += 1
                     break
                 except (Urllib3ProtocolError, RemoteDisconnected) as e:
                     print(f"[W{worker_id}] [!] Chrome connection lỗi ({type(e).__name__}), tạo lại driver...")
@@ -700,7 +615,7 @@ def _run_worker_impl(
                                 except Exception:
                                     pass
                                 driver = None
-                            new_driver = _create_driver(headless=headless, worker_id=worker_id)
+                            new_driver = _create_driver(headless=headless)
                             if USE_UNDETECTED:
                                 time.sleep(3)
                             _safe_get_url(new_driver, BASE_URL)
@@ -718,14 +633,11 @@ def _run_worker_impl(
                                 time.sleep(12)
                     if driver is None:
                         retry_count = MAX_RETRY_PER_PHONE + 1
-                        worker_exit_driver_dead = True
                     if retry_count > MAX_RETRY_PER_PHONE:
                         if not_completed_path and not_completed_lock is not None:
                             with not_completed_lock:
                                 Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
-                        processed_count += 1
-                        if phone_queue is None:
-                            i += 1
+                        i += 1
                         break
                 except (TimeoutException, NoSuchWindowException) as e:
                     is_window_gone = isinstance(e, NoSuchWindowException)
@@ -738,7 +650,7 @@ def _run_worker_impl(
                                 except Exception:
                                     pass
                                 driver = None
-                            driver = _create_driver(headless=headless, worker_id=worker_id)
+                            driver = _create_driver(headless=headless)
                             if USE_UNDETECTED:
                                 time.sleep(3)
                             _safe_get_url(driver, BASE_URL)
@@ -749,13 +661,10 @@ def _run_worker_impl(
                             print(f"[W{worker_id}] [!] Không tạo lại được driver: {init_err}")
                             driver = None
                             retry_count = MAX_RETRY_PER_PHONE + 1
-                            worker_exit_driver_dead = True
                             if not_completed_path and not_completed_lock is not None:
                                 with not_completed_lock:
                                     Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
-                            processed_count += 1
-                            if phone_queue is None:
-                                i += 1
+                            i += 1
                             break
                     retry_count += 1
                     print(f"[W{worker_id}] [!] Timeout load trang (retry {retry_count}/{MAX_RETRY_PER_PHONE})")
@@ -763,9 +672,7 @@ def _run_worker_impl(
                         if not_completed_path and not_completed_lock is not None:
                             with not_completed_lock:
                                 Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
-                        processed_count += 1
-                        if phone_queue is None:
-                            i += 1
+                        i += 1
                         break
                 except Exception as e:
                     err_str = str(e)
@@ -778,9 +685,6 @@ def _run_worker_impl(
                         or "Remote end closed" in err_str
                         or "Connection aborted" in err_str
                         or "ProtocolError" in err_str
-                        or "Read timed out" in err_str
-                        or "Driver is None" in err_str
-                        or "'NoneType' object has no attribute 'get'" in err_str
                     )
                     if is_connection_lost:
                         print(f"[W{worker_id}] [!] Chrome đã thoát, tạo lại driver...")
@@ -793,7 +697,7 @@ def _run_worker_impl(
                                     except Exception:
                                         pass
                                     driver = None
-                                new_driver = _create_driver(headless=headless, worker_id=worker_id)
+                                new_driver = _create_driver(headless=headless)
                                 if USE_UNDETECTED:
                                     time.sleep(3)
                                 _safe_get_url(new_driver, BASE_URL)
@@ -811,24 +715,17 @@ def _run_worker_impl(
                                     time.sleep(12)
                         if driver is None:
                             retry_count = MAX_RETRY_PER_PHONE + 1
-                            worker_exit_driver_dead = True
                     else:
                         print(f"[W{worker_id}] [!] Lỗi với {phone}: {e}")
-                        if "'NoneType' object has no attribute 'get'" in err_str:
-                            import traceback
-                            traceback.print_exc()
                         retry_count += 1
                     if retry_count > MAX_RETRY_PER_PHONE:
                         if not_completed_path and not_completed_lock is not None:
                             with not_completed_lock:
                                 Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
-                        processed_count += 1
-                        if phone_queue is None:
-                            i += 1
+                        i += 1
                         break
 
-        total_msg = processed_count if phone_queue is not None else total
-        print(f"[W{worker_id}] [*] Hoàn thành {total_msg} số trong chunk.")
+        print(f"[W{worker_id}] [*] Hoàn thành {total} số trong chunk.")
     finally:
         if driver:
             def _do_quit():
@@ -868,29 +765,33 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
         if workers <= 1:
             run_worker(0, phones, headless=headless)
         else:
-            # Queue chung: worker nào xong nhanh (kể cả lỗi) sẽ lấy số tiếp, không chờ worker chậm
-            stagger_delay = 8.0 if workers >= 3 else (5.0 if workers >= 2 else 0)
-            print(f"[*] Chạy {workers} luồng song song (queue chung)" + (f" (stagger {stagger_delay}s)" if stagger_delay else "") + "...")
+            # Chia đều SĐT cho N luồng
+            chunk_size = (len(phones) + workers - 1) // workers
+            chunks = [
+                phones[i : i + chunk_size]
+                for i in range(0, len(phones), chunk_size)
+            ]
+            while len(chunks) < workers:
+                chunks.append([])
+            chunks = chunks[:workers]
+
+            stagger_delay = 10.0 if workers >= 4 else (8.0 if workers >= 2 else 0)
+            print(f"[*] Chạy {workers} luồng song song" + (f" (stagger {stagger_delay}s)" if stagger_delay else "") + "...")
 
             manager = Manager()
-            phone_queue = manager.Queue()
-            for p in phones:
-                phone_queue.put(p)
-            for _ in range(workers):
-                phone_queue.put(None)  # Sentinel: mỗi worker nhận None thì thoát
-
             completed_counter = manager.Value("i", 0)
             not_completed_lock = manager.Lock()
             processes = []
-            for wid in range(workers):
+            for wid, chunk in enumerate(chunks):
+                if not chunk:
+                    continue
                 p = Process(
                     target=run_worker,
-                    args=(wid + 1, [], headless, stagger_delay * wid),
+                    args=(wid + 1, chunk, headless, stagger_delay * wid),
                     kwargs={
                         "completed_counter": completed_counter,
                         "not_completed_path": not_completed_path,
                         "not_completed_lock": not_completed_lock,
-                        "phone_queue": phone_queue,
                     },
                 )
                 p.start()

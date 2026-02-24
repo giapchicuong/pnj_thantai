@@ -5,10 +5,6 @@
 # Hoặc: WORKERS=5 bash deploy_vps.sh
 
 set -e
-export DEBIAN_FRONTEND=noninteractive
-export APT_LISTCHANGES_FRONTEND=none
-DPKG_OPTS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
-
 WORKERS=${WORKERS:-5}
 REPO_URL="https://github.com/giapchicuong/pnj_thantai.git"
 INSTALL_DIR="$HOME/pnj_thantai"
@@ -20,11 +16,11 @@ echo ""
 
 # 1. Cập nhật hệ thống
 echo "[1/8] Cập nhật hệ thống..."
-sudo apt-get $DPKG_OPTS update -qq && sudo apt-get $DPKG_OPTS upgrade -y -qq
+sudo apt update -qq && sudo apt upgrade -y -qq
 
 # 2. Cài gói hệ thống
 echo "[2/8] Cài gói hệ thống..."
-sudo apt-get $DPKG_OPTS install -y -qq \
+sudo apt install -y -qq \
   git wget curl unzip screen \
   tesseract-ocr tesseract-ocr-vie \
   libgl1-mesa-glx libglib2.0-0 libnss3 libxss1 libgbm1 libasound2
@@ -34,8 +30,8 @@ echo "[3/8] Cài Google Chrome..."
 if ! command -v google-chrome &>/dev/null; then
   wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
   echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
-  sudo apt-get $DPKG_OPTS update -qq
-  sudo apt-get $DPKG_OPTS install -y -qq google-chrome-stable
+  sudo apt update -qq
+  sudo apt install -y -qq google-chrome-stable
 fi
 echo "  Chrome: $(google-chrome --version 2>/dev/null || echo 'đã cài')"
 
