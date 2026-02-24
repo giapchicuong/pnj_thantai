@@ -776,7 +776,7 @@ def run(workers: int = 1, headless: bool = False, continuous: bool = False, relo
                 chunks.append([])
             chunks = chunks[:workers]
 
-            stagger_delay = 10.0 if workers >= 4 else (8.0 if workers >= 2 else 0)
+            stagger_delay = 15.0 if workers >= 3 else (10.0 if workers >= 2 else 0)
             print(f"[*] Chạy {workers} luồng song song" + (f" (stagger {stagger_delay}s)" if stagger_delay else "") + "...")
 
             manager = Manager()
