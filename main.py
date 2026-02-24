@@ -627,8 +627,12 @@ def _run_worker_impl(
         i = 0
         total = len(phones)
         processed_count = 0
+        worker_exit_driver_dead = False  # Thoát hẳn worker khi không tạo lại được driver
 
         while True:
+            if worker_exit_driver_dead:
+                print(f"[W{worker_id}] [!] Thoát worker do không tạo lại được driver.")
+                break
             if phone_queue is not None:
                 phone = phone_queue.get()
                 if phone is None:
@@ -714,6 +718,7 @@ def _run_worker_impl(
                                 time.sleep(12)
                     if driver is None:
                         retry_count = MAX_RETRY_PER_PHONE + 1
+                        worker_exit_driver_dead = True
                     if retry_count > MAX_RETRY_PER_PHONE:
                         if not_completed_path and not_completed_lock is not None:
                             with not_completed_lock:
@@ -744,6 +749,7 @@ def _run_worker_impl(
                             print(f"[W{worker_id}] [!] Không tạo lại được driver: {init_err}")
                             driver = None
                             retry_count = MAX_RETRY_PER_PHONE + 1
+                            worker_exit_driver_dead = True
                             if not_completed_path and not_completed_lock is not None:
                                 with not_completed_lock:
                                     Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
@@ -805,6 +811,7 @@ def _run_worker_impl(
                                     time.sleep(12)
                         if driver is None:
                             retry_count = MAX_RETRY_PER_PHONE + 1
+                            worker_exit_driver_dead = True
                     else:
                         print(f"[W{worker_id}] [!] Lỗi với {phone}: {e}")
                         if "'NoneType' object has no attribute 'get'" in err_str:

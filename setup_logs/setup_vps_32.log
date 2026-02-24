@@ -1314,3 +1314,13 @@ No VM guests are running outdated hypervisor (qemu) binaries on this host.
 E: Package 'libgl1-mesa-glx' has no installation candidate
 E: Package 'libasound2' has no installation candidate
 [VPS 32] Deploy fail 103.82.26.66 (xem setup_vps_32.log)
+[VPS 32] Bắt đầu 103.82.26.66 [MBC]...
+=== Deploy PNJ Thần Tài ===
+  Workers: 5 (phù hợp 16GB RAM)
+  Thư mục: /root/pnj_thantai
+
+[1/8] Cập nhật hệ thống...
+[2/8] Cài gói hệ thống...
+E: Package 'libgl1-mesa-glx' has no installation candidate
+E: Package 'libasound2' has no installation candidate
+[VPS 32] Deploy fail 103.82.26.66 (xem setup_vps_32.log)

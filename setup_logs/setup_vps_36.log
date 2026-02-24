@@ -1313,3 +1313,14 @@ No VM guests are running outdated hypervisor (qemu) binaries on this host.
 E: Package 'libgl1-mesa-glx' has no installation candidate
 E: Package 'libasound2' has no installation candidate
 [VPS 36] Deploy fail 103.82.26.189 (xem setup_vps_36.log)
+[VPS 36] Bắt đầu 103.82.26.189 [DNB]...
+# Host 103.82.26.189 found: line 178
+# Host 103.82.26.189 found: line 183
+# Host 103.82.26.189 found: line 184
+/Users/giapchicuong/.ssh/known_hosts updated.
+Original contents retained as /Users/giapchicuong/.ssh/known_hosts.old
+Warning: Permanently added '103.82.26.189' (ED25519) to the list of known hosts.
+Permission denied, please try again.
+Permission denied, please try again.
+root@103.82.26.189: Permission denied (publickey,password).
+[VPS 36] Deploy fail 103.82.26.189 (xem setup_vps_36.log)

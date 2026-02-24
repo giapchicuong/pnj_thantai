@@ -1314,3 +1314,19 @@ No VM guests are running outdated hypervisor (qemu) binaries on this host.
 E: Package 'libgl1-mesa-glx' has no installation candidate
 E: Package 'libasound2' has no installation candidate
 [VPS 39] Deploy fail 103.82.26.240 (xem setup_vps_39.log)
+[VPS 39] Bắt đầu 103.82.26.240 [HCM]...
+# Host 103.82.26.240 found: line 176
+# Host 103.82.26.240 found: line 180
+# Host 103.82.26.240 found: line 181
+/Users/giapchicuong/.ssh/known_hosts updated.
+Original contents retained as /Users/giapchicuong/.ssh/known_hosts.old
+Warning: Permanently added '103.82.26.240' (ED25519) to the list of known hosts.
+=== Deploy PNJ Thần Tài ===
+  Workers: 5 (phù hợp 16GB RAM)
+  Thư mục: /root/pnj_thantai
+
+[1/8] Cập nhật hệ thống...
+[2/8] Cài gói hệ thống...
+E: Package 'libgl1-mesa-glx' has no installation candidate
+E: Package 'libasound2' has no installation candidate
+[VPS 39] Deploy fail 103.82.26.240 (xem setup_vps_39.log)

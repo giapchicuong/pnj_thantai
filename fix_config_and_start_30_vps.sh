@@ -44,7 +44,7 @@ for i in "${LIST[@]}"; do
   url_esc="${url//\'/\'\\\'\'}"
   # Lần 1: lấy code mới nhất (reset --hard, tránh lỗi merge) + sửa config + kill
   sshpass -p "$pw" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 root@"$ip" \
-    "cd /root/pnj_thantai && git fetch origin 2>/dev/null; git reset --hard origin/main 2>/dev/null; rm -rf __pycache__ 2>/dev/null; \
+    "cd /root/pnj_thantai && git fetch origin 2>/dev/null; git reset --hard origin/main >/dev/null 2>&1; rm -rf __pycache__ 2>/dev/null; \
      printf '%s' '$url_esc' > .url_tmp && python3 -c \"
 import re
 url = open('.url_tmp').read().rstrip()
