@@ -356,37 +356,49 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
         time.sleep(2)
         return True
 
-    # 6. Quay 3 lượt - chờ loading ẩn -> bấm quay -> chờ popup -> bấm Tích thêm lộc / Về trang chủ
-    for turn in range(3):
+    # 6. Quay cho đến khi còn 0 lượt — có bao nhiêu lượt thì quay bấy nhiêu
+    turn_done = 0
+    max_spins = 20  # tránh lặp vô hạn nếu không đọc được số lượt
+    while turn_done < max_spins:
+        remaining = get_so_luot_con_lai(driver)
+        if remaining is not None and remaining == 0:
+            print(f"{prefix}     Đã quay hết lượt (0 còn lại). Hoàn thành {phone}.")
+            _hide_video_overlay(driver)
+            click_element(driver, SELECTORS["ve_trang_chu"])
+            time.sleep(2)
+            return True
+
         if not _wait_for_spin_button(driver):
-            print(f"{prefix} [!] Không thấy nút quay lượt {turn + 1} sau {WAIT_FOR_NEXT_SPIN}s.")
+            print(f"{prefix} [!] Không thấy nút quay (còn {remaining} lượt) sau {WAIT_FOR_NEXT_SPIN}s.")
+            return False
         spin_clicked = click_element(driver, SELECTORS["tich_loc_1_luot"])
         if not spin_clicked:
             spin_clicked = click_element(driver, SELECTORS["tich_them_loc"])
         if not spin_clicked:
-            print(f"{prefix} [!] Không bấm được nút quay lượt {turn + 1}.")
-        else:
-            print(f"{prefix}     Quay lượt {turn + 1}/3...")
-            _wait_loading_hide(driver, LOADING_SPIN, timeout=WAIT_FOR_POPUP_MAX)
-            _wait_for_spin_popup(driver)
-            time.sleep(0.3)
-            _hide_video_overlay(driver)
-            if turn < 2:
-                click_element(driver, SELECTORS["tich_them_loc"])
-                time.sleep(1.5)
-            else:
-                # Lượt 3 xong: bấm Về trang chủ ngay trên popup
-                click_element(driver, SELECTORS["ve_trang_chu"])
-                time.sleep(1)
-                print(f"{prefix}     Hoàn thành {phone}.")
-                return True
+            print(f"{prefix} [!] Không bấm được nút quay.")
+            return False
 
-    # 7. Nếu chưa bấm Về trang chủ (lỡ lượt 3 không click được)
+        turn_done += 1
+        print(f"{prefix}     Quay lượt {turn_done} (còn {remaining} lượt)...")
+        _wait_loading_hide(driver, LOADING_SPIN, timeout=WAIT_FOR_POPUP_MAX)
+        _wait_for_spin_popup(driver)
+        time.sleep(0.3)
+        _hide_video_overlay(driver)
+        # Đóng popup: Tích thêm lộc (quay tiếp) hoặc Về trang chủ (nếu hết lượt)
+        clicked_next = click_element(driver, SELECTORS["tich_them_loc"])
+        if not clicked_next:
+            click_element(driver, SELECTORS["ve_trang_chu"])
+        time.sleep(1.5)
+        remaining_after = get_so_luot_con_lai(driver)
+        if remaining_after is not None:
+            print(f"{prefix}     Đã quay được lượt {turn_done} (còn {remaining_after} lượt).")
+        else:
+            print(f"{prefix}     Đã quay được lượt {turn_done}.")
+
+    # Thoát vòng do max_spins — về trang chủ, coi như xong
     remaining = get_so_luot_con_lai(driver)
     if remaining is not None and remaining > 0:
-        print(f"{prefix} [!] Còn {remaining} lượt chưa quay -> retry SĐT.")
-        return False
-
+        print(f"{prefix} [!] Đã quay {turn_done} lượt, còn {remaining} lượt (giới hạn {max_spins}).")
     _hide_video_overlay(driver)
     click_element(driver, SELECTORS["ve_trang_chu"])
     time.sleep(2)
