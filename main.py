@@ -5,7 +5,9 @@ Luồng: Chưa mua hàng -> Nhập SĐT + Captcha -> Tích Lộc Ngay -> Quay 3 
 Hỗ trợ chạy nhiều luồng song song: python main.py --workers 10
 """
 import argparse
+import fcntl
 import os
+import random
 import threading
 import time
 import base64
@@ -396,22 +398,31 @@ def load_phones(path: str = "phones.txt") -> list[str]:
     return [line.strip() for line in lines if line.strip()]
 
 
-def _create_driver(headless: bool = False):
+def _create_driver(headless: bool = False, worker_id: int = 0):
     """Tạo Chrome driver - dùng undetected-chromedriver khi USE_UNDETECTED để né Cloudflare."""
     if USE_UNDETECTED:
         import undetected_chromedriver as uc
-        options = uc.ChromeOptions()
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--window-size=1920,1080")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--disable-software-rasterizer")
-        if LOW_MEMORY_MODE or headless:
-            options.add_argument("--headless=new")
-        kwargs = {"options": options, "version_main": 145}
-        if os.path.isfile("/usr/bin/google-chrome"):
-            kwargs["browser_executable_path"] = "/usr/bin/google-chrome"
-        driver = uc.Chrome(**kwargs)
+        # Lock: tránh nhiều worker cùng tải/copy chromedriver → Text file busy, No such file
+        lock_path = "/tmp/pnj_uc_create.lock"
+        os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+        with open(lock_path, "a") as lf:
+            fcntl.flock(lf.fileno(), fcntl.LOCK_EX)
+            try:
+                time.sleep(random.uniform(0, 2))  # Stagger khi đợi lock
+                options = uc.ChromeOptions()
+                options.add_argument("--no-sandbox")
+                options.add_argument("--disable-dev-shm-usage")
+                options.add_argument("--window-size=1920,1080")
+                options.add_argument("--disable-gpu")
+                options.add_argument("--disable-software-rasterizer")
+                if LOW_MEMORY_MODE or headless:
+                    options.add_argument("--headless=new")
+                kwargs = {"options": options, "version_main": 145}
+                if os.path.isfile("/usr/bin/google-chrome"):
+                    kwargs["browser_executable_path"] = "/usr/bin/google-chrome"
+                driver = uc.Chrome(**kwargs)
+            finally:
+                fcntl.flock(lf.fileno(), fcntl.LOCK_UN)
     else:
         options = Options()
         options.add_argument("--no-sandbox")
@@ -531,7 +542,7 @@ def _run_worker_impl(
     max_init_retries = 12
     for attempt in range(max_init_retries):
         try:
-            driver = _create_driver(headless=headless)
+            driver = _create_driver(headless=headless, worker_id=worker_id)
             if USE_UNDETECTED:
                 time.sleep(3)  # Cho Chrome ổn định trước khi load trang
             _safe_get_url(driver, BASE_URL)
@@ -607,7 +618,7 @@ def _run_worker_impl(
                 try:
                     if driver is None:
                         try:
-                            driver = _create_driver(headless=headless)
+                            driver = _create_driver(headless=headless, worker_id=worker_id)
                             if USE_UNDETECTED:
                                 time.sleep(3)
                             _log_cloudflare_status(driver, worker_id)
@@ -660,7 +671,7 @@ def _run_worker_impl(
                                 except Exception:
                                     pass
                                 driver = None
-                            new_driver = _create_driver(headless=headless)
+                            new_driver = _create_driver(headless=headless, worker_id=worker_id)
                             if USE_UNDETECTED:
                                 time.sleep(3)
                             _safe_get_url(new_driver, BASE_URL)
@@ -697,7 +708,7 @@ def _run_worker_impl(
                                 except Exception:
                                     pass
                                 driver = None
-                            driver = _create_driver(headless=headless)
+                            driver = _create_driver(headless=headless, worker_id=worker_id)
                             if USE_UNDETECTED:
                                 time.sleep(3)
                             _safe_get_url(driver, BASE_URL)
@@ -749,7 +760,7 @@ def _run_worker_impl(
                                     except Exception:
                                         pass
                                     driver = None
-                                new_driver = _create_driver(headless=headless)
+                                new_driver = _create_driver(headless=headless, worker_id=worker_id)
                                 if USE_UNDETECTED:
                                     time.sleep(3)
                                 _safe_get_url(new_driver, BASE_URL)
