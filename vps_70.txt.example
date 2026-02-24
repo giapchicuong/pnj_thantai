@@ -1,0 +1,6 @@
+# Sao chép thành vps_70.txt và điền IP + password (mỗi dòng 1 VPS)
+# Format: IP PASSWORD (cách nhau bởi space hoặc tab)
+#
+# 103.82.22.18 your_password_1
+# 103.82.22.50 your_password_2
+# ... (70 dòng)
