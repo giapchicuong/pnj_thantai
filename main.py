@@ -73,6 +73,8 @@ def find_element(driver, selectors: list, by_xpath_markers: tuple = ("//", "[", 
 
 def _hide_video_overlay(driver) -> None:
     """Ẩn video fullscreen chặn click."""
+    if driver is None:
+        return
     try:
         driver.execute_script("""
             document.querySelectorAll('video').forEach(v => {
@@ -268,6 +270,8 @@ def _wait_for_chua_mua_hang(driver, timeout: float = 12) -> bool:
 
 def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
     """Xử lý 1 số điện thoại: nhập SĐT, captcha, quay 3 lượt."""
+    if driver is None:
+        return False
     prefix = f"[W{worker_id}]" if worker_id else ""
     print(f"\n{prefix} [*] Đang xử lý: {phone}")
 
@@ -451,6 +455,8 @@ def _create_driver(headless: bool = False, worker_id: int = 0):
 
 def _log_cloudflare_status(driver, worker_id: int, timeout: float = 15) -> bool:
     """Chờ element trang PNJ xuất hiện, log trạng thái Cloudflare. Trả về True nếu đã vượt."""
+    if driver is None:
+        return False
     try:
         WebDriverWait(driver, timeout).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "#btChuaMuaHang, #txtSoDienThoai"))
@@ -472,6 +478,8 @@ def _log_cloudflare_status(driver, worker_id: int, timeout: float = 15) -> bool:
 
 def _safe_get_url(driver, url: str, max_retries: int = 5) -> bool:
     """Load trang, retry khi timeout, window closed hoặc connection error. Trả về True nếu thành công."""
+    if driver is None:
+        raise RuntimeError("Driver is None")
     for attempt in range(max_retries):
         try:
             driver.get(url)
@@ -748,6 +756,8 @@ def _run_worker_impl(
                         or "Connection aborted" in err_str
                         or "ProtocolError" in err_str
                         or "Read timed out" in err_str
+                        or "Driver is None" in err_str
+                        or "'NoneType' object has no attribute 'get'" in err_str
                     )
                     if is_connection_lost:
                         print(f"[W{worker_id}] [!] Chrome đã thoát, tạo lại driver...")

@@ -22,17 +22,25 @@ fi
 PARALLEL=0
 [ "$1" = "--parallel" ] || [ "$1" = "-p" ] && PARALLEL=1
 
-SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=5"
+SSH_OPTS="-T -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=30 -o ServerAliveCountMax=5"
 
 do_one() {
   local i="$1"
   local ip="$2"
   local pass="$3"
-  [ -z "$ip" ] || [ -z "$pass" ] && return 1
+  [ -z "$ip" ] || [ -z "$pass" ] && return 0
   echo "[$i/70] $ip - Đang stop + pull + start..."
-  sshpass -p "$pass" ssh $SSH_OPTS root@$ip "pkill -f main.py 2>/dev/null; screen -S pnj -X quit 2>/dev/null; sleep 2; cd /root/pnj_thantai 2>/dev/null && git fetch origin main && git reset --hard origin/main && true" 2>/dev/null || true
+  # Gộp stop + git pull + start trong 1 SSH để tránh git bị cắt giữa chừng
+  sshpass -p "$pass" ssh $SSH_OPTS root@$ip "
+    pkill -f main.py 2>/dev/null || true
+    screen -S pnj -X quit 2>/dev/null || true
+    sleep 2
+    cd /root/pnj_thantai || exit 1
+    git fetch origin main 2>/dev/null || true
+    git reset --hard origin/main 2>/dev/null || true
+    bash start_pnj.sh
+  " < /dev/null 2>/dev/null || true
   [ -f "phones_$i.txt" ] && sshpass -p "$pass" scp $SSH_OPTS "phones_$i.txt" "root@${ip}:/root/pnj_thantai/phones.txt" 2>/dev/null || true
-  sshpass -p "$pass" ssh $SSH_OPTS root@$ip "cd /root/pnj_thantai 2>/dev/null && bash start_pnj.sh" 2>/dev/null || true
   echo "[$i/70] $ip - OK"
 }
 
