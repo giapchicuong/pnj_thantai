@@ -47,7 +47,7 @@ WAIT_AFTER_SPIN = 8
 WAIT_FOR_POPUP_MAX = 25
 WAIT_FOR_NEXT_SPIN = 30
 
-NUM_WORKERS = 6
+NUM_WORKERS = 1  # Khuyến nghị ổn định trên VPS Linux (tránh crash Chrome đa luồng)
 SUMMARY_INTERVAL = 120
 MAX_RETRY_PER_PHONE = 3  # Retry tối đa mỗi SĐT khi lỗi (tránh loop vô hạn)
 MAX_IP_ROTATE_PER_PHONE = 5  # Đổi IP tối đa mỗi SĐT khi bị chặn (quit + tạo driver mới)
