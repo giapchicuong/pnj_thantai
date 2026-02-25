@@ -7,6 +7,9 @@ Chạy trên máy local: python deploy_all.py
   - servers.txt: mỗi dòng "IP<Tab>Password" (user mặc định root)
   - keys.txt: mỗi dòng 1 TMProxy API key (key thứ i ghép với VPS thứ i)
 
+Trên máy local cần có phones_1.txt .. phones_40.txt; script upload phones_{i}.txt lên từng VPS thành phones.txt.
+Mỗi VPS i dùng link roadshow (MBC/MTG/TNN/DNB/HCM/MTY) theo (i-1) % 6 (config.py BASE_URL_INDEX).
+
 Cài đặt: pip install paramiko
 """
 from pathlib import Path
@@ -28,7 +31,8 @@ DIR = Path(__file__).parent
 SERVERS_FILE = DIR / "servers.txt"
 KEYS_FILE = DIR / "keys.txt"
 USER = "root"
-MAX_WORKERS = 10  # Giảm luồng để tránh "Connection reset by peer" khi nhiều SSH cùng lúc
+MAX_WORKERS = 15  # SSH đa luồng (10–20), giảm nếu gặp "Connection reset by peer"
+NUM_BASE_URLS = 6  # 40 VPS chia đều 6 link: BASE_URL_INDEX = (idx-1) % 6
 SSH_RETRIES = 3  # Số lần thử lại khi SSH lỗi (banner / connection reset)
 SSH_RETRY_DELAY = 2  # Giây chờ giữa mỗi lần retry
 
@@ -70,12 +74,14 @@ def escape_bash_single(s: str) -> str:
 
 def deploy_one(args: tuple) -> tuple[int, str, str, bool, str]:
     """
-    Thực thi deploy trên 1 VPS: upload phones_{idx}.txt từ local lên ~/pnj_thantai/phones.txt rồi chạy start_pnj.sh.
+    Thực thi deploy trên 1 VPS: upload phones_{idx}.txt từ local lên ~/pnj_thantai/phones.txt,
+    set API key + BASE_URL_INDEX, chạy start_pnj.sh.
     args = (index_1based, ip, password, api_key).
     Trả về (index, ip, status, ok, message).
     """
     idx, ip, password, api_key = args
     label = f"VPS {idx} - {ip}"
+    url_index = (idx - 1) % NUM_BASE_URLS  # Chia đều 6 link (MBC, MTG, TNN, DNB, HCM, MTY)
     local_phones = DIR / f"phones_{idx}.txt"
     if not local_phones.is_file():
         return (idx, ip, label, False, f"Không tìm thấy file local: phones_{idx}.txt")
@@ -96,8 +102,7 @@ def deploy_one(args: tuple) -> tuple[int, str, str, bool, str]:
             )
             # Upload file local phones_{idx}.txt -> remote ~/pnj_thantai/phones.txt
             sftp = client.open_sftp()
-            remote_path = "/root/pnj_thantai/phones.txt"
-            sftp.put(str(local_phones), remote_path)
+            sftp.put(str(local_phones), "/root/pnj_thantai/phones.txt")
             sftp.close()
 
             safe_key = escape_bash_single(api_key)
@@ -105,6 +110,7 @@ def deploy_one(args: tuple) -> tuple[int, str, str, bool, str]:
                 "screen -S pnj -X quit 2>/dev/null || true; "
                 "cd ~/pnj_thantai && "
                 f"export TMPROXY_API_KEY='{safe_key}' && "
+                f"export BASE_URL_INDEX='{url_index}' && "
                 "bash start_pnj.sh"
             )
             stdin, stdout, stderr = client.exec_command(cmd, timeout=30)

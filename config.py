@@ -1,9 +1,19 @@
 """
 Cấu hình selectors cho automation PNJ Thần Tài.
 """
+import os
 
-# URL trang chính
-BASE_URL = "https://thantai.pnj.com.vn?utm_type=roadshow&utm_source=MTY&utm_medium=roadshow&utm_content=MTY_roadshow_HO"
+# 6 link roadshow – 40 VPS chia đều: VPS i dùng BASE_URLS[(i-1) % 6] (set qua env BASE_URL_INDEX)
+BASE_URLS = [
+    "https://thantai.pnj.com.vn?utm_type=roadshow&utm_source=MBC&utm_medium=roadshow&utm_campaign=gameXTT26&utm_content=MBC_roadshow_HO",
+    "https://thantai.pnj.com.vn?utm_type=roadshow&utm_source=MTG&utm_medium=roadshow&utm_campaign=gameXTT26&utm_content=MTG_roadshow_HO",
+    "https://thantai.pnj.com.vn?utm_type=roadshow&utm_source=TNN&utm_medium=roadshow&utm_campaign=gameXTT26&utm_content=TNN_roadshow_HO",
+    "https://thantai.pnj.com.vn?utm_type=roadshow&utm_source=DNB&utm_medium=roadshow&utm_campaign=gameXTT26&utm_content=DNB_roadshow_HO",
+    "https://thantai.pnj.com.vn?utm_type=roadshow&utm_source=HCM&utm_medium=roadshow&utm_campaign=gameXTT26&utm_content=HCM_roadshow_HO",
+    "https://thantai.pnj.com.vn?utm_type=roadshow&utm_source=MTY&utm_medium=roadshow&utm_campaign=gameXTT26&utm_content=MTY_roadshow_HO",
+]
+_URL_INDEX = int(os.environ.get("BASE_URL_INDEX", "0")) % len(BASE_URLS)
+BASE_URL = BASE_URLS[_URL_INDEX]
 BASE_ORIGIN = "https://thantai.pnj.com.vn"
 
 # Các selector - dựa trên HTML thực tế
