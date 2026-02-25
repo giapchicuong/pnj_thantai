@@ -47,6 +47,7 @@ def main():
         print(f"git reset --hard origin/main")
         print(f"screen -S pnj -X quit 2>/dev/null || true")
         print(f"export TMPROXY_API_KEY={api_key}")
+        print(f"cp phones_{int(stt)}.txt phones.txt")
         print(f"cd ~/{repo} && bash start_pnj.sh")
         print()
 
