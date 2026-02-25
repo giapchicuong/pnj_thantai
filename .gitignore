@@ -6,6 +6,7 @@ __pycache__/
 
 # Credentials - không đẩy lên Git
 vps_70.txt
+vps_ip_pass.xlsx
 
 # File SĐT lớn - không đẩy lên GitHub (chỉ giữ phones.txt mẫu)
 phones_*.txt

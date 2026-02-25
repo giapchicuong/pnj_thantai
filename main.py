@@ -9,6 +9,7 @@ import os
 import threading
 import time
 import base64
+import requests
 from multiprocessing import Process
 from pathlib import Path
 from typing import Optional
@@ -48,10 +49,64 @@ from config import (
     NUM_WORKERS,
     LOW_MEMORY_MODE,
     MAX_RETRY_PER_PHONE,
+    MAX_IP_ROTATE_PER_PHONE,
     USE_UNDETECTED,
     SUMMARY_INTERVAL,
 )
 from captcha_solver import solve_captcha_from_bytes
+
+# TMProxy API — đọc từ env để mỗi VPS dùng key riêng, tránh bị ghi đè khi git pull
+TMPROXY_API_KEY = os.environ.get(
+    "TMPROXY_API_KEY",
+    "fb8c30dd6b2e62d26b0bde004c09fe34",
+)
+TMPROXY_GET_CURRENT = "https://tmproxy.com/api/proxy/get-current-proxy"
+TMPROXY_GET_NEW = "https://tmproxy.com/api/proxy/get-new-proxy"
+
+
+def get_tmproxy(force_new: bool = False) -> Optional[str]:
+    """Lấy proxy từ TMProxy. force_new=False: dùng get-current-proxy; nếu không có hoặc force_new=True: gọi get-new-proxy.
+    Xử lý cooldown (next_request): chờ rồi gọi lại cho đến khi lấy được IP mới."""
+    while True:
+        if not force_new:
+            try:
+                r = requests.post(TMPROXY_GET_CURRENT, json={"api_key": TMPROXY_API_KEY}, timeout=15)
+                j = r.json()
+                if j.get("code") == 0 and j.get("data") and j["data"].get("https"):
+                    return j["data"]["https"]
+            except Exception as e:
+                pass  # Fall through to get-new-proxy
+        try:
+            r = requests.post(TMPROXY_GET_NEW, json={"api_key": TMPROXY_API_KEY}, timeout=15)
+            j = r.json()
+            if j.get("code") == 0 and j.get("data") and j["data"].get("https"):
+                return j["data"]["https"]
+            next_wait = j.get("data", {}).get("next_request")
+            if next_wait is not None and next_wait > 0:
+                print(f"[TMProxy] Chưa hết cooldown, đợi {next_wait}s...")
+                time.sleep(next_wait + 1)
+                force_new = True
+                continue
+        except Exception as e:
+            print(f"[TMProxy] Lỗi API: {e}")
+        return None
+
+
+class IpBlockedError(Exception):
+    """IP bị chặn — cần quit driver và tạo mới (proxy xoay sẽ cấp IP mới)."""
+
+
+def check_ip_blocked(driver) -> bool:
+    """Nhận diện block IP: tìm #dvContentThongBao, hiển thị và chứa text 'Có vấn đề xảy ra' -> True."""
+    if driver is None:
+        return False
+    try:
+        el = driver.find_element(By.CSS_SELECTOR, "#dvContentThongBao")
+        if el and el.is_displayed() and "Có vấn đề xảy ra" in (el.text or ""):
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def find_element(driver, selectors: list, by_xpath_markers: tuple = ("//", "[", ".", "#")) -> Optional[object]:
@@ -272,10 +327,16 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
     # 0. Ẩn video overlay, đợi nút Chưa mua hàng
     _hide_video_overlay(driver)
     if not _wait_for_chua_mua_hang(driver):
+        if check_ip_blocked(driver):
+            raise IpBlockedError("Phát hiện popup IP bị chặn (sau load trang).")
         return False
+    if check_ip_blocked(driver):
+        raise IpBlockedError("Phát hiện popup IP bị chặn (sau load trang).")
 
     # 1. Click Chưa mua hàng
     if not click_element(driver, SELECTORS["chua_mua_hang"]):
+        if check_ip_blocked(driver):
+            raise IpBlockedError("Phát hiện popup IP bị chặn.")
         print(f"{prefix} [!] Không tìm thấy nút Chưa mua hàng.")
         return False
 
@@ -290,6 +351,8 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
             break
         time.sleep(0.5)
     if not fill_input(driver, SELECTORS["phone_input"], phone):
+        if check_ip_blocked(driver):
+            raise IpBlockedError("Phát hiện popup IP bị chặn.")
         print(f"{prefix} [!] Không tìm thấy ô nhập SĐT.")
         return False
 
@@ -297,15 +360,21 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
     captcha_ok = False
     for _ in range(5):
         if not solve_and_fill_captcha(driver):
+            if check_ip_blocked(driver):
+                raise IpBlockedError("Phát hiện popup IP bị chặn.")
             print(f"{prefix} [!] Không giải được captcha.")
             return False
 
         if not click_element(driver, SELECTORS["tich_loc_ngay"]):
+            if check_ip_blocked(driver):
+                raise IpBlockedError("Phát hiện popup IP bị chặn.")
             print(f"{prefix} [!] Không tìm thấy nút Tích Lộc Ngay.")
             return False
 
         time.sleep(1)
 
+        if check_ip_blocked(driver):
+            raise IpBlockedError("Phát hiện popup IP bị chặn (sau Tích Lộc Ngay).")
         if find_element(driver, SELECTORS.get("popup_close", [])):
             print(f"{prefix}     Captcha sai, đóng popup và thử lại...")
             click_element(driver, SELECTORS["popup_close"])
@@ -329,6 +398,8 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
                 fill_input(driver, SELECTORS["captcha_input"], manual)
                 click_element(driver, SELECTORS["tich_loc_ngay"])
                 time.sleep(2)
+                if check_ip_blocked(driver):
+                    raise IpBlockedError("Phát hiện popup IP bị chặn (manual captcha).")
                 if not find_element(driver, SELECTORS.get("popup_close", [])):
                     captcha_ok = True
                     print("    Nhập tay thành công!")
@@ -336,6 +407,8 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
                     click_element(driver, SELECTORS["popup_close"])
 
     if not captcha_ok:
+        if check_ip_blocked(driver):
+            raise IpBlockedError("Phát hiện popup IP bị chặn.")
         print(f"{prefix} [!] Captcha sai quá nhiều lần.")
         return False
 
@@ -351,13 +424,19 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
         return True
 
     # 6. Quay 3 lượt - chờ loading ẩn -> bấm quay -> chờ popup -> bấm Tích thêm lộc / Về trang chủ
+    if check_ip_blocked(driver):
+        raise IpBlockedError("Phát hiện popup IP bị chặn (trước vòng quay).")
     for turn in range(3):
         if not _wait_for_spin_button(driver):
+            if check_ip_blocked(driver):
+                raise IpBlockedError("Phát hiện popup IP bị chặn (vòng quay).")
             print(f"{prefix} [!] Không thấy nút quay lượt {turn + 1} sau {WAIT_FOR_NEXT_SPIN}s.")
         spin_clicked = click_element(driver, SELECTORS["tich_loc_1_luot"])
         if not spin_clicked:
             spin_clicked = click_element(driver, SELECTORS["tich_them_loc"])
         if not spin_clicked:
+            if check_ip_blocked(driver):
+                raise IpBlockedError("Phát hiện popup IP bị chặn (vòng quay).")
             print(f"{prefix} [!] Không bấm được nút quay lượt {turn + 1}.")
         else:
             print(f"{prefix}     Quay lượt {turn + 1}/3...")
@@ -378,6 +457,8 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
     # 7. Nếu chưa bấm Về trang chủ (lỡ lượt 3 không click được)
     remaining = get_so_luot_con_lai(driver)
     if remaining is not None and remaining > 0:
+        if check_ip_blocked(driver):
+            raise IpBlockedError("Phát hiện popup IP bị chặn.")
         print(f"{prefix} [!] Còn {remaining} lượt chưa quay -> retry SĐT.")
         return False
 
@@ -396,8 +477,15 @@ def load_phones(path: str = "phones.txt") -> list[str]:
     return [line.strip() for line in lines if line.strip()]
 
 
-def _create_driver(headless: bool = False):
-    """Tạo Chrome driver - dùng undetected-chromedriver khi USE_UNDETECTED để né Cloudflare."""
+def _create_driver(headless: bool = False, proxy_string: Optional[str] = None):
+    """Tạo Chrome driver - dùng undetected-chromedriver khi USE_UNDETECTED để né Cloudflare.
+    proxy_string: địa chỉ proxy (vd từ TMProxy). prefs: chặn images, stylesheets, media để tiết kiệm RAM."""
+    # Chặn CSS + media để tiết kiệm RAM; không chặn images vì captcha cần tải ảnh.
+    prefs = {
+        "profile.managed_default_content_settings.stylesheets": 2,
+        "profile.default_content_setting_values.media_stream_mic": 2,
+        "profile.default_content_setting_values.media_stream_camera": 2,
+    }
     if USE_UNDETECTED:
         import undetected_chromedriver as uc
         options = uc.ChromeOptions()
@@ -406,6 +494,9 @@ def _create_driver(headless: bool = False):
         options.add_argument("--window-size=1920,1080")
         options.add_argument("--disable-gpu")
         options.add_argument("--disable-software-rasterizer")
+        if proxy_string:
+            options.add_argument(f"--proxy-server={proxy_string}")
+        options.add_experimental_option("prefs", prefs)
         if LOW_MEMORY_MODE or headless:
             options.add_argument("--headless=new")
         kwargs = {"options": options, "version_main": 145}
@@ -420,6 +511,9 @@ def _create_driver(headless: bool = False):
         options.add_argument("--window-size=1920,1080")
         options.add_argument("--disable-extensions")
         options.add_argument("--disable-gpu")
+        if proxy_string:
+            options.add_argument(f"--proxy-server={proxy_string}")
+        options.add_experimental_option("prefs", prefs)
         use_low_mem = LOW_MEMORY_MODE or headless
         if use_low_mem:
             options.add_argument("--headless=new")
@@ -514,11 +608,12 @@ def _run_worker_impl(
         time.sleep(stagger_sec)
     time.sleep(3)  # Đợi Chrome cũ (nếu có) thoát hẳn trước khi tạo mới
 
+    current_proxy = get_tmproxy()
     driver = None
     max_init_retries = 12
     for attempt in range(max_init_retries):
         try:
-            driver = _create_driver(headless=headless)
+            driver = _create_driver(headless=headless, proxy_string=current_proxy)
             if USE_UNDETECTED:
                 time.sleep(3)  # Cho Chrome ổn định trước khi load trang
             _safe_get_url(driver, BASE_URL)
@@ -580,12 +675,15 @@ def _run_worker_impl(
         while i < total:
             phone = phones[i]
             retry_count = 0
+            ip_rotate_count = 0
 
             while retry_count <= MAX_RETRY_PER_PHONE:
                 try:
                     _safe_get_url(driver, BASE_URL)
                     time.sleep(4)  # Đợi trang + video render xong (nhiều luồng cần lâu hơn)
                     _hide_video_overlay(driver)
+                    if check_ip_blocked(driver):
+                        raise IpBlockedError("Popup IP bị chặn sau khi load trang.")
 
                     ok = process_one_phone(driver, phone, worker_id=worker_id)
                     if ok:
@@ -615,7 +713,7 @@ def _run_worker_impl(
                                 except Exception:
                                     pass
                                 driver = None
-                            new_driver = _create_driver(headless=headless)
+                            new_driver = _create_driver(headless=headless, proxy_string=current_proxy)
                             if USE_UNDETECTED:
                                 time.sleep(3)
                             _safe_get_url(new_driver, BASE_URL)
@@ -650,7 +748,7 @@ def _run_worker_impl(
                                 except Exception:
                                     pass
                                 driver = None
-                            driver = _create_driver(headless=headless)
+                            driver = _create_driver(headless=headless, proxy_string=current_proxy)
                             if USE_UNDETECTED:
                                 time.sleep(3)
                             _safe_get_url(driver, BASE_URL)
@@ -674,6 +772,36 @@ def _run_worker_impl(
                                 Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
                         i += 1
                         break
+                except IpBlockedError as e:
+                    if ip_rotate_count >= MAX_IP_ROTATE_PER_PHONE:
+                        print(f"[W{worker_id}] [!] Bị chặn IP, đã đổi {ip_rotate_count} lần — bỏ qua {phone}.")
+                        if not_completed_path and not_completed_lock is not None:
+                            with not_completed_lock:
+                                Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
+                        i += 1
+                        break
+                    print(f"[W{worker_id}] [!] PNJ chặn IP. Đang tiến hành đổi IP...")
+                    try:
+                        if driver:
+                            driver.quit()
+                    except Exception:
+                        pass
+                    driver = None
+                    try:
+                        current_proxy = get_tmproxy(force_new=True)
+                        driver = _create_driver(headless=headless, proxy_string=current_proxy)
+                        if USE_UNDETECTED:
+                            time.sleep(3)
+                        _safe_get_url(driver, BASE_URL)
+                        time.sleep(2)
+                        _hide_video_overlay(driver)
+                        _log_cloudflare_status(driver, worker_id)
+                        ip_rotate_count += 1
+                        time.sleep(2)
+                    except Exception as init_err:
+                        print(f"[W{worker_id}] [!] Không tạo lại driver sau IP block: {init_err}")
+                        ip_rotate_count = MAX_IP_ROTATE_PER_PHONE
+                    continue
                 except Exception as e:
                     err_str = str(e)
                     is_connection_lost = (
@@ -697,7 +825,7 @@ def _run_worker_impl(
                                     except Exception:
                                         pass
                                     driver = None
-                                new_driver = _create_driver(headless=headless)
+                                new_driver = _create_driver(headless=headless, proxy_string=current_proxy)
                                 if USE_UNDETECTED:
                                     time.sleep(3)
                                 _safe_get_url(new_driver, BASE_URL)

@@ -3,7 +3,7 @@ Cấu hình selectors cho automation PNJ Thần Tài.
 """
 
 # URL trang chính
-BASE_URL = "https://thantai.pnj.com.vn?utm_type=roadshow&utm_source=DNB&utm_medium=roadshow&utm_content=DNB_roadshow_HO"
+BASE_URL = "https://thantai.pnj.com.vn?utm_type=roadshow&utm_source=MTY&utm_medium=roadshow&utm_content=MTY_roadshow_HO"
 BASE_ORIGIN = "https://thantai.pnj.com.vn"
 
 # Các selector - dựa trên HTML thực tế
@@ -32,6 +32,10 @@ CLOUDFLARE_TURNSTILE = "iframe[src*='challenges.cloudflare.com']"
 POPUP_CON_LOOT = "#dvButtonPopupKetQua_ConLuot"
 POPUP_HET_LOOT = "#dvButtonPopupKetQua_HetLuot"
 
+# Popup IP bị chặn (rotate proxy: quit driver + tạo mới = IP mới)
+POPUP_IP_BLOCK = ["#dvContentThongBao", ".form-container-content"]
+POPUP_IP_BLOCK_TEXT = "Có vấn đề xảy ra!"
+
 CHECKBOX_TERMS = ["input[type='checkbox']", ".terms-checkbox"]
 
 # Timeouts (giây)
@@ -46,6 +50,7 @@ WAIT_FOR_NEXT_SPIN = 30
 NUM_WORKERS = 6
 SUMMARY_INTERVAL = 120
 MAX_RETRY_PER_PHONE = 3  # Retry tối đa mỗi SĐT khi lỗi (tránh loop vô hạn)
+MAX_IP_ROTATE_PER_PHONE = 5  # Đổi IP tối đa mỗi SĐT khi bị chặn (quit + tạo driver mới)
 
 # Chế độ tiết kiệm RAM. False = mở cửa sổ Chrome (ổn định hơn khi nhiều luồng)
 LOW_MEMORY_MODE = True
