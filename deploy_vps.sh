@@ -54,7 +54,13 @@ export PATH="$HOME/miniconda3/bin:$PATH"
 echo "[6/8] Tạo môi trường Python 3.11..."
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
-conda create -n pnj311 python=3.11 -y 2>/dev/null || true
+# Dùng libmamba solver nếu có (giảm lỗi Solving environment: failed)
+conda install -n base conda-libmamba-solver -y 2>/dev/null && conda config --set solver libmamba 2>/dev/null || true
+# Tạo env; nếu 3.11 lỗi thì thử 3.10
+if ! conda create -n pnj311 python=3.11 -y; then
+  echo "  Python 3.11 thất bại, thử Python 3.10..."
+  conda create -n pnj311 python=3.10 -y
+fi
 source "$HOME/miniconda3/bin/activate" pnj311
 
 # 7. Clone repo và cài Python packages
