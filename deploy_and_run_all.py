@@ -1,22 +1,13 @@
 #!/usr/bin/env python3
 """
-Deploy (nếu chưa có thư mục) + update code + start PNJ trên tất cả VPS trong all_vps.txt.
+Deploy (nếu chưa có thư mục) + update + start. Dùng cho VPS MỚI / chưa có ~/pnj_thantai.
+Chạy update_and_run_all.py trước cho server ĐÃ CHẠY; script này cho server còn lại.
 
-Đầu vào: all_vps.txt — mỗi dòng "IP<Tab hoặc Space>Password" (user: root).
-       phones_1.txt, phones_2.txt, ... phones_N.txt — nếu có thì tải lên VPS tương ứng thành phones.txt (VPS dòng 1 → phones_1.txt, dòng 40 → phones_40.txt).
+Đầu vào: all_vps.txt (IP<Tab>Password). phones_1.txt, phones_2.txt... → VPS 1, 2, ...
+Trên mỗi VPS: (1) Deploy nếu chưa có thư mục (2) git pull (3) upload phones (4) kill + start_pnj.sh
 
-Trên mỗi VPS:
-  1. Nếu chưa có ~/pnj_thantai: chạy deploy (curl deploy_vps.sh | bash)
-  2. Nếu có rồi: bỏ qua deploy
-  3. cd ~/pnj_thantai && git fetch origin && git reset --hard origin/main
-  4. Nếu có file phones_{số}.txt (số = thứ tự dòng trong all_vps.txt) thì tải lên ~/pnj_thantai/phones.txt
-  5. cd ~/pnj_thantai && bash start_pnj.sh
-
-Khi thấy log có "[*] Khởi động PNJ trong screen" hoặc "[!] Session 'pnj' đã chạy" → coi là đã chạy.
-
-Chạy: pip install paramiko
-      python deploy_and_run_all.py
-      python deploy_and_run_all.py -s all_vps.txt -w 50
+  python deploy_and_run_all.py
+  python deploy_and_run_all.py -s all_vps.txt -w 50 -n 200
 """
 from pathlib import Path
 import argparse
