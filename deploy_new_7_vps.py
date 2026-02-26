@@ -20,6 +20,8 @@ import sys
 import time
 import threading
 import logging
+import traceback
+import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.getLogger("paramiko").setLevel(logging.CRITICAL)
@@ -108,7 +110,7 @@ def deploy_one(args: tuple) -> tuple[int, str, bool, list[str]]:
             port=22,
             username=USER,
             password=password,
-            timeout=15,
+            timeout=25,
             allow_agent=False,
             look_for_keys=False,
         )
@@ -124,7 +126,7 @@ def deploy_one(args: tuple) -> tuple[int, str, bool, list[str]]:
         use_local_deploy = local_deploy_sh.is_file()
         for attempt in range(1, MAX_INSTALL_ATTEMPTS + 1):
             # Kill process/screen cũ trước mỗi lần thử để retry sạch
-            _, so, se = client.exec_command(kill_cmd, timeout=5)
+            _, so, se = client.exec_command(kill_cmd, timeout=15)
             so.channel.recv_exit_status()
             if use_local_deploy:
                 sftp_install = client.open_sftp()
@@ -169,13 +171,11 @@ def deploy_one(args: tuple) -> tuple[int, str, bool, list[str]]:
         sftp.close()
         messages.append(f"Đã upload file phones_{file_idx}.txt")
 
-        # --- BƯỚC 3: Kill nếu đã chạy rồi, rồi khởi động lại tool ---
-        safe_key = escape_bash_single(api_key)
+        # --- BƯỚC 3: Kill nếu đã chạy rồi, rồi khởi động lại tool (không proxy) ---
         cmd = (
             "screen -S pnj -X quit 2>/dev/null || true; "
             "pkill -f 'run_16gb.sh|start_pnj.sh|main.py.*pnj' 2>/dev/null || true; "
             "cd ~/pnj_thantai && "
-            f"export TMPROXY_API_KEY='{safe_key}' && "
             "export BASE_URL='https://thantai.pnj.com.vn/' && "
             "bash start_pnj.sh"
         )
@@ -189,8 +189,26 @@ def deploy_one(args: tuple) -> tuple[int, str, bool, list[str]]:
     except paramiko.AuthenticationException as e:
         messages.append(f"Sai mật khẩu / auth: {e}")
         return (idx, ip, False, messages)
+    except (socket.timeout, TimeoutError) as e:
+        messages.append(f"Lỗi: Timeout kết nối hoặc lệnh ({e})")
+        return (idx, ip, False, messages)
+    except (ConnectionResetError, BrokenPipeError, OSError) as e:
+        messages.append(f"Lỗi: Mất kết nối / IO ({type(e).__name__}: {e})")
+        return (idx, ip, False, messages)
     except Exception as e:
-        messages.append(f"Lỗi: {e}")
+        err_msg = str(e).strip() if str(e) else f"{type(e).__name__}"
+        messages.append(f"Lỗi: {err_msg}")
+        # Ghi traceback vào file để debug (khi message rỗng thường do timeout/connection)
+        log_file = DIR / f"failed_deploy_{ip.replace('.', '_')}.txt"
+        try:
+            tb = traceback.format_exc()
+            log_file.write_text(
+                f"=== Exception: {type(e).__name__} ===\n{err_msg}\n\n=== Traceback ===\n{tb}",
+                encoding="utf-8",
+            )
+            messages.append(f"Đã ghi log: {log_file.name}")
+        except Exception:
+            pass
         return (idx, ip, False, messages)
 
 

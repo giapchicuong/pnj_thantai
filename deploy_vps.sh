@@ -1,18 +1,32 @@
 #!/bin/bash
 # Script deploy PNJ Thần Tài lên VPS Ubuntu 20.04
-# Dùng cho instance 16GB RAM - chạy 3 workers (ổn định)
+# Không dùng proxy (đã bỏ Cloudflare). Chạy 3 luồng (workers) mỗi VPS.
 # Chạy: bash deploy_vps.sh
-# Hoặc: WORKERS=5 bash deploy_vps.sh
 
 set -e
-WORKERS=${WORKERS:-5}
+WORKERS=3
 REPO_URL="https://github.com/giapchicuong/pnj_thantai.git"
 INSTALL_DIR="$HOME/pnj_thantai"
 
 echo "=== Deploy PNJ Thần Tài ==="
-echo "  Workers: $WORKERS (phù hợp 16GB RAM)"
+echo "  Workers: $WORKERS luồng (không proxy)"
 echo "  Thư mục: $INSTALL_DIR"
 echo ""
+
+# 0. Đợi dpkg/apt lock (tránh lỗi "Unable to acquire the dpkg frontend lock")
+echo "[0/8] Đợi dpkg sẵn sàng..."
+WAIT_MAX=24
+i=0
+while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+  i=$((i + 1))
+  if [ "$i" -ge "$WAIT_MAX" ]; then
+    echo "  [!] Timeout đợi dpkg lock (2 phút). Thoát."
+    exit 1
+  fi
+  echo "  Đợi lock apt/dpkg... (${i}/${WAIT_MAX})"
+  sleep 5
+done
+echo "  Dpkg sẵn sàng."
 
 # 1. Cập nhật hệ thống
 echo "[1/8] Cập nhật hệ thống..."

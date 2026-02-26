@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Cập nhật code trên các VPS đã chạy: git pull + khởi động lại tool.
-Trên mỗi VPS: cd ~/pnj_thantai && git pull origin main && screen -S pnj -X quit; bash start_pnj.sh
+Trên mỗi VPS: git fetch + reset --hard origin/main (luôn lấy code mới nhất, tránh overwrite) rồi khởi động lại.
 
 Đầu vào: vps_1_248.txt (IP + password, mỗi dòng)
 
@@ -64,7 +64,7 @@ def update_one(args: tuple) -> tuple[int, str, bool, str]:
             look_for_keys=False,
         )
         cmd = (
-            "cd ~/pnj_thantai && git pull origin main && "
+            "cd ~/pnj_thantai && git fetch origin && git reset --hard origin/main && "
             "screen -S pnj -X quit 2>/dev/null || true && "
             "bash start_pnj.sh"
         )

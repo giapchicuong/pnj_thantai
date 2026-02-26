@@ -35,7 +35,6 @@ from config import (
     CHECKBOX_TERMS,
     LOADING_SPIN,
     LOADING_TICH_LOC_NGAY,
-    CLOUDFLARE_TURNSTILE,
     POPUP_CON_LOOT,
     POPUP_HET_LOOT,
     TIMEOUT_PAGE_LOAD,
@@ -280,14 +279,14 @@ def get_captcha_image_bytes(driver) -> Optional[bytes]:
 
 
 def solve_and_fill_captcha(driver, max_retries: int = 3) -> bool:
-    """Lấy captcha, giải bằng Tesseract, điền vào ô. Thử refresh nếu sai."""
-    time.sleep(1)  # Đợi trang load ổn định trước khi lấy ảnh (đa luồng)
+    """Lấy captcha, giải, điền vào ô. Thử refresh nếu sai."""
+    time.sleep(0.4)
     for attempt in range(max_retries):
         img_bytes = get_captcha_image_bytes(driver)
         if not img_bytes:
             print("[Captcha] Không lấy được ảnh.")
             if attempt < max_retries - 1 and click_element(driver, SELECTORS.get("captcha_refresh", [])):
-                time.sleep(1)
+                time.sleep(0.5)
             continue
 
         text = solve_captcha_from_bytes(
@@ -298,7 +297,7 @@ def solve_and_fill_captcha(driver, max_retries: int = 3) -> bool:
         if not text:
             print("[Captcha] OCR không nhận ra text.")
             if attempt < max_retries - 1 and click_element(driver, SELECTORS.get("captcha_refresh", [])):
-                time.sleep(1)
+                time.sleep(0.5)
             continue
 
         print(f"[Captcha] Nhận dạng: {text}")
@@ -306,7 +305,7 @@ def solve_and_fill_captcha(driver, max_retries: int = 3) -> bool:
             return True
 
         if attempt < max_retries - 1 and click_element(driver, SELECTORS.get("captcha_refresh", [])):
-            time.sleep(1)
+            time.sleep(0.5)
 
     return False
 
@@ -321,7 +320,7 @@ def check_and_click_terms(driver) -> None:
                 el = driver.find_element(By.CSS_SELECTOR, sel)
             if el and el.is_displayed() and not el.is_selected():
                 el.click()
-                time.sleep(0.5)
+                time.sleep(0.2)
                 break
         except Exception:
             continue
@@ -355,7 +354,7 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
             page_loaded = True
             break
 
-        if _wait_for_chua_mua_hang(driver, timeout=20):
+        if _wait_for_chua_mua_hang(driver, timeout=12):
             page_loaded = True
             break
 
@@ -363,15 +362,15 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
             raise IpBlockedError("Phát hiện popup IP bị chặn (sau load trang).")
 
         if attempt_load < 4:
-            print(f"{prefix} [!] Chưa qua được Cloudflare hoặc mạng lag (lần {attempt_load + 1}/5). Đang tải lại trang...")
+            print(f"{prefix} [!] Trang chưa load xong (lần {attempt_load + 1}/5). Đang tải lại...")
             try:
                 driver.refresh()
             except Exception:
                 pass
-            time.sleep(5)
+            time.sleep(2)
         else:
-            print(f"{prefix} [!] Đã thử tải trang 5 lần (~2 phút) vẫn kẹt Cloudflare. Ép đổi IP!")
-            raise IpBlockedError("Kẹt Cloudflare / Mạng lag (cần đổi IP).")
+            print(f"{prefix} [!] Đã thử tải trang 5 lần (~2 phút) vẫn chưa xong. Ép đổi IP!")
+            raise IpBlockedError("Trang không load được sau 2 phút (cần đổi IP).")
 
     if not page_loaded:
         return False
@@ -384,12 +383,12 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
             print(f"{prefix} [!] Không tìm thấy nút Chưa mua hàng.")
             return False
 
-    time.sleep(1)
+    time.sleep(0.3)
 
     # 2. Tick điều khoản (nếu có)
     check_and_click_terms(driver)
 
-    # 3. Đợi ô nhập SĐT xuất hiện (WebDriverWait sau Cloudflare) rồi điền
+    # 3. Đợi ô nhập SĐT xuất hiện rồi điền
     phone_sel = SELECTORS["phone_input"][0] if SELECTORS["phone_input"] else ""
     try:
         WebDriverWait(driver, TIMEOUT_PAGE_LOAD).until(
@@ -415,8 +414,8 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
                 raise IpBlockedError("Phát hiện popup IP bị chặn.")
 
             if attempt_cap < 7:
-                print(f"{prefix} [!] Không tải/giải được captcha (lần {attempt_cap + 1}/8). Tiếp tục kiên nhẫn thử lại...")
-                time.sleep(3)
+                print(f"{prefix} [!] Không tải/giải được captcha (lần {attempt_cap + 1}/8). Thử lại...")
+                time.sleep(1)
                 fill_input(driver, SELECTORS["phone_input"], phone)  # Điền lại SĐT phòng khi trang bị refresh làm mất số
                 continue
             else:
@@ -429,16 +428,16 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
             print(f"{prefix} [!] Không tìm thấy nút Tích Lộc Ngay.")
             return False
 
-        time.sleep(1)
+        time.sleep(0.4)
 
         if check_ip_blocked(driver):
             raise IpBlockedError("Phát hiện popup IP bị chặn (sau Tích Lộc Ngay).")
         if find_element(driver, SELECTORS.get("popup_close", [])):
             print(f"{prefix}     Captcha sai, đóng popup và thử lại...")
             click_element(driver, SELECTORS["popup_close"])
-            time.sleep(0.5)
+            time.sleep(0.2)
             click_element(driver, SELECTORS.get("captcha_refresh", []))
-            time.sleep(0.5)
+            time.sleep(0.2)
             fill_input(driver, SELECTORS["captcha_input"], "")
             continue
 
@@ -455,7 +454,7 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
             if manual:
                 fill_input(driver, SELECTORS["captcha_input"], manual)
                 click_element(driver, SELECTORS["tich_loc_ngay"])
-                time.sleep(2)
+                time.sleep(1)
                 if check_ip_blocked(driver):
                     raise IpBlockedError("Phát hiện popup IP bị chặn (manual captcha).")
                 if not find_element(driver, SELECTORS.get("popup_close", [])):
@@ -470,7 +469,7 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
         print(f"{prefix} [!] Captcha sai quá nhiều lần.")
         return False
 
-    time.sleep(0.5)
+    time.sleep(0.2)
     _hide_video_overlay(driver)
 
     # 5b. Nếu đã 0 lượt (SĐT đã chơi hết) -> Về trang chủ, chuyển sang số mới
@@ -478,7 +477,7 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
     if remaining is not None and remaining == 0:
         print(f"{prefix}     SĐT đã hết lượt (0) -> chuyển số mới.")
         click_element(driver, SELECTORS["ve_trang_chu"])
-        time.sleep(2)
+        time.sleep(1)
         return True
 
     # 6. Quay 3 lượt - chờ loading ẩn -> bấm quay -> chờ popup -> bấm Tích thêm lộc / Về trang chủ
@@ -518,11 +517,11 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
         _hide_video_overlay(driver)
         if turn < 2:
             click_element(driver, SELECTORS["tich_them_loc"])
-            time.sleep(2.5)
+            time.sleep(1)
         else:
             # Lượt 3 xong: bấm Về trang chủ ngay trên popup
             click_element(driver, SELECTORS["ve_trang_chu"])
-            time.sleep(1)
+            time.sleep(0.5)
             print(f"{prefix}     Hoàn thành {phone}.")
             return True
 
@@ -536,7 +535,7 @@ def process_one_phone(driver, phone: str, worker_id: int = 0) -> bool:
 
     _hide_video_overlay(driver)
     click_element(driver, SELECTORS["ve_trang_chu"])
-    time.sleep(2)
+    time.sleep(0.8)
     return True
 
 
@@ -550,7 +549,7 @@ def load_phones(path: str = "phones.txt") -> list[str]:
 
 
 def _create_driver(worker_id: int = 0, headless: bool = False, proxy_string: Optional[str] = None):
-    """Tạo Chrome driver - dùng undetected-chromedriver khi USE_UNDETECTED để né Cloudflare.
+    """Tạo Chrome driver - dùng undetected-chromedriver khi USE_UNDETECTED.
     worker_id: dùng để tạo profile riêng /tmp/pnj_chrome_w{worker_id}, tránh xung đột đa luồng.
     proxy_string: địa chỉ proxy (vd từ TMProxy). prefs: chặn stylesheets, media để tiết kiệm RAM."""
     # Chặn CSS + media để tiết kiệm RAM; không chặn images vì captcha cần tải ảnh.
@@ -612,25 +611,15 @@ def _create_driver(worker_id: int = 0, headless: bool = False, proxy_string: Opt
     return driver
 
 
-def _log_cloudflare_status(driver, worker_id: int, timeout: float = 15) -> bool:
-    """Chờ element trang PNJ xuất hiện, log trạng thái Cloudflare. Trả về True nếu đã vượt."""
+def _wait_page_ready(driver, worker_id: int, timeout: float = 8) -> bool:
+    """Chờ element trang PNJ xuất hiện. Trả về True nếu sẵn sàng."""
     try:
         WebDriverWait(driver, timeout).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "#btChuaMuaHang, #txtSoDienThoai"))
         )
-        print(f"[W{worker_id}] [Cloudflare] Đã vượt Cloudflare ✓")
-        time.sleep(3)  # Đợi DOM render xong sau khi qua Cloudflare
+        time.sleep(0.8)
         return True
     except TimeoutException:
-        try:
-            driver.find_element(By.CSS_SELECTOR, CLOUDFLARE_TURNSTILE)
-            print(f"[W{worker_id}] [Cloudflare] Vẫn đang chờ Turnstile...")
-        except Exception:
-            try:
-                driver.find_element(By.CSS_SELECTOR, "#challenge-running, #cf-challenge-running")
-                print(f"[W{worker_id}] [Cloudflare] Vẫn đang chờ challenge...")
-            except Exception:
-                print(f"[W{worker_id}] [Cloudflare] Chưa thấy nội dung trang (timeout {timeout}s)")
         return False
 
 
@@ -642,12 +631,12 @@ def _safe_get_url(driver, url: str, max_retries: int = 5) -> bool:
             return True
         except (TimeoutException, NoSuchWindowException):
             if attempt < max_retries - 1:
-                time.sleep(2)
+                time.sleep(1)
             else:
                 raise
         except (Urllib3ProtocolError, RemoteDisconnected, MaxRetryError):
             if attempt < max_retries - 1:
-                time.sleep(6)
+                time.sleep(2)
             else:
                 raise
     return False
@@ -688,7 +677,7 @@ def _run_worker_impl(
 ):
     if stagger_sec > 0:
         time.sleep(stagger_sec)
-    time.sleep(3)  # Đợi Chrome cũ (nếu có) thoát hẳn trước khi tạo mới
+    time.sleep(1)
 
     current_proxy = get_tmproxy()
     driver = None
@@ -697,7 +686,7 @@ def _run_worker_impl(
         try:
             driver = _create_driver(worker_id=worker_id, headless=headless, proxy_string=current_proxy)
             if USE_UNDETECTED:
-                time.sleep(3)  # Cho Chrome ổn định trước khi load trang
+                time.sleep(1)
             _safe_get_url(driver, BASE_URL)
             break
         except (TimeoutException, NoSuchWindowException) as e:
@@ -709,7 +698,7 @@ def _run_worker_impl(
                     pass
             if attempt < max_init_retries - 1:
                 print(f"[W{worker_id}] [!] Cửa sổ đóng sớm, thử lại ({attempt + 1}/{max_init_retries})...")
-                time.sleep(8)
+                time.sleep(3)
                 continue
             raise
         except (Urllib3ProtocolError, RemoteDisconnected) as e:
@@ -721,7 +710,7 @@ def _run_worker_impl(
                     pass
             if attempt < max_init_retries - 1:
                 print(f"[W{worker_id}] [!] Chrome connection lỗi, thử lại ({attempt + 1}/{max_init_retries})...")
-                time.sleep(15)
+                time.sleep(5)
                 continue
             raise RuntimeError("Không tạo được Chrome driver sau nhiều lần thử (connection error).") from e
         except Exception as e:
@@ -742,16 +731,16 @@ def _run_worker_impl(
             )
             if attempt < max_init_retries - 1 and is_retryable_init:
                 print(f"[W{worker_id}] [!] Driver lỗi, thử lại ({attempt + 1}/{max_init_retries})...")
-                time.sleep(8)
+                time.sleep(3)
                 continue
             raise
     else:
         raise RuntimeError("Không tạo được Chrome driver sau nhiều lần thử.")
 
     try:
-        time.sleep(2)
+        time.sleep(0.5)
         _hide_video_overlay(driver)
-        _log_cloudflare_status(driver, worker_id)
+        _wait_page_ready(driver, worker_id)
 
         i = 0
         total = len(phones)
@@ -762,14 +751,14 @@ def _run_worker_impl(
                     current_proxy = get_tmproxy()
                     driver = _create_driver(worker_id=worker_id, headless=headless, proxy_string=current_proxy)
                     if USE_UNDETECTED:
-                        time.sleep(3)
+                        time.sleep(1)
                     _safe_get_url(driver, BASE_URL)
-                    time.sleep(2)
+                    time.sleep(0.5)
                     _hide_video_overlay(driver)
-                    _log_cloudflare_status(driver, worker_id)
+                    _wait_page_ready(driver, worker_id)
                 except Exception as e:
-                    print(f"[W{worker_id}] [!] Lỗi khi khởi tạo lại driver: {e}. Thử lại sau 10s...")
-                    time.sleep(10)
+                    print(f"[W{worker_id}] [!] Lỗi khi khởi tạo lại driver: {e}. Thử lại sau 3s...")
+                    time.sleep(3)
                     continue
 
             phone = phones[i]
@@ -780,7 +769,7 @@ def _run_worker_impl(
                 try:
                     if retry_count > 0:
                         _safe_get_url(driver, BASE_URL)
-                        time.sleep(4)
+                        time.sleep(1)
                     _hide_video_overlay(driver)
                     if check_ip_blocked(driver):
                         raise IpBlockedError("Popup IP bị chặn sau khi load trang.")
@@ -794,7 +783,7 @@ def _run_worker_impl(
                     retry_count += 1
                     if retry_count <= MAX_RETRY_PER_PHONE:
                         print(f"[W{worker_id}]     Retry {retry_count}/{MAX_RETRY_PER_PHONE}...")
-                        time.sleep(2)
+                        time.sleep(0.8)
                         continue
                     if not_completed_path and not_completed_lock is not None:
                         with not_completed_lock:
@@ -815,20 +804,20 @@ def _run_worker_impl(
                                     pass
                             new_driver = _create_driver(worker_id=worker_id, headless=headless, proxy_string=current_proxy)
                             if USE_UNDETECTED:
-                                time.sleep(3)
+                                time.sleep(1)
                             _safe_get_url(new_driver, BASE_URL)
-                            time.sleep(2)
+                            time.sleep(0.5)
                             _hide_video_overlay(new_driver)
-                            _log_cloudflare_status(new_driver, worker_id)
+                            _wait_page_ready(new_driver, worker_id)
                             driver = new_driver
                             retry_count += 1
                             if retry_count <= MAX_RETRY_PER_PHONE:
-                                time.sleep(2)
+                                time.sleep(0.8)
                             break
                         except Exception as init_err:
                             print(f"[W{worker_id}] [!] Không tạo lại được driver ({recreate_attempt + 1}/3): {init_err}")
                             if recreate_attempt < 2:
-                                time.sleep(12)
+                                time.sleep(5)
                     if driver is None:
                         retry_count = MAX_RETRY_PER_PHONE + 1
                     if retry_count > MAX_RETRY_PER_PHONE:
@@ -850,11 +839,11 @@ def _run_worker_impl(
                                     pass
                             driver = _create_driver(worker_id=worker_id, headless=headless, proxy_string=current_proxy)
                             if USE_UNDETECTED:
-                                time.sleep(3)
+                                time.sleep(1)
                             _safe_get_url(driver, BASE_URL)
-                            time.sleep(2)
+                            time.sleep(0.5)
                             _hide_video_overlay(driver)
-                            _log_cloudflare_status(driver, worker_id)
+                            _wait_page_ready(driver, worker_id)
                         except Exception as init_err:
                             print(f"[W{worker_id}] [!] Không tạo lại được driver: {init_err}")
                             driver = None
@@ -873,6 +862,14 @@ def _run_worker_impl(
                         i += 1
                         break
                 except IpBlockedError as e:
+                    # Không dùng proxy thì không thể đổi IP — bỏ qua số, không in "đổi IP"
+                    if not (TMPROXY_API_KEY or "").strip():
+                        print(f"[W{worker_id}] [!] PNJ báo chặn IP (đang chạy không proxy) — bỏ qua {phone}.")
+                        if not_completed_path and not_completed_lock is not None:
+                            with not_completed_lock:
+                                Path(not_completed_path).open("a", encoding="utf-8").write(phone + "\n")
+                        i += 1
+                        break
                     if ip_rotate_count >= MAX_IP_ROTATE_PER_PHONE:
                         print(f"[W{worker_id}] [!] Bị chặn IP, đã đổi {ip_rotate_count} lần — bỏ qua {phone}.")
                         if not_completed_path and not_completed_lock is not None:
@@ -891,13 +888,13 @@ def _run_worker_impl(
                         current_proxy = get_tmproxy(force_new=True)
                         driver = _create_driver(worker_id=worker_id, headless=headless, proxy_string=current_proxy)
                         if USE_UNDETECTED:
-                            time.sleep(3)
+                            time.sleep(1)
                         _safe_get_url(driver, BASE_URL)
-                        time.sleep(2)
+                        time.sleep(0.5)
                         _hide_video_overlay(driver)
-                        _log_cloudflare_status(driver, worker_id)
+                        _wait_page_ready(driver, worker_id)
                         ip_rotate_count += 1
-                        time.sleep(2)
+                        time.sleep(0.5)
                     except Exception as init_err:
                         print(f"[W{worker_id}] [!] Không tạo lại driver sau IP block: {init_err}")
                         ip_rotate_count = MAX_IP_ROTATE_PER_PHONE
@@ -927,20 +924,20 @@ def _run_worker_impl(
                                         pass
                                 new_driver = _create_driver(worker_id=worker_id, headless=headless, proxy_string=current_proxy)
                                 if USE_UNDETECTED:
-                                    time.sleep(3)
+                                    time.sleep(1)
                                 _safe_get_url(new_driver, BASE_URL)
-                                time.sleep(2)
+                                time.sleep(0.5)
                                 _hide_video_overlay(new_driver)
-                                _log_cloudflare_status(new_driver, worker_id)
+                                _wait_page_ready(new_driver, worker_id)
                                 driver = new_driver
                                 retry_count += 1
                                 if retry_count <= MAX_RETRY_PER_PHONE:
-                                    time.sleep(2)
+                                    time.sleep(0.8)
                                     break
                             except Exception as init_err:
                                 print(f"[W{worker_id}] [!] Không tạo lại được driver ({recreate_attempt + 1}/3): {init_err}")
                                 if recreate_attempt < 2:
-                                    time.sleep(12)
+                                    time.sleep(5)
                         if driver is None:
                             retry_count = MAX_RETRY_PER_PHONE + 1
                     else:
