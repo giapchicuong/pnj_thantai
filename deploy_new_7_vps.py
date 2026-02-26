@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 """
 Cài đặt và khởi động tool PNJ Thần Tài lên N VPS Ubuntu mới (đa luồng).
-Chạy từ file SĐT số 48 trở đi: phones_48.txt, phones_49.txt, ... (40 VPS = 48..87).
+Chạy từ file SĐT số 88 tới 200: phones_88.txt, phones_89.txt, ... phones_200.txt.
 
 Chạy trên máy local: python deploy_new_7_vps.py
 
 Đầu vào:
-  - new_servers.txt: 40 dòng, mỗi dòng "IP<Tab hoặc Space>Password" (user: root)
-  - new_keys.txt: 40 dòng, mỗi dòng 1 TMProxy API key
-  - phones_48.txt .. phones_87.txt: file SĐT (VPS 1 dùng phones_48, VPS 40 dùng phones_87)
+  - new_servers.txt: mỗi dòng "IP<Tab hoặc Space>Password" (user: root)
+  - new_keys.txt: mỗi dòng 1 TMProxy API key
+  - phones_88.txt .. phones_200.txt: file SĐT (VPS 1 = phones_88, VPS 113 = phones_200)
 
-Mỗi VPS dùng link roadshow (MBC/MTG/TNN/DNB/HCM/MTY) theo (i-1) % 6, giống deploy_all (config.py BASE_URL_INDEX).
+Tất cả VPS dùng 1 link: https://thantai.pnj.com.vn/ (config.py đọc từ env BASE_URL).
 
 Cài đặt: pip install paramiko
 """
 from pathlib import Path
+import argparse
 import sys
 import time
 import threading
@@ -38,10 +39,9 @@ SUCCESS_MARKER = "=== Deploy xong ==="
 MAX_INSTALL_ATTEMPTS = 10
 INSTALL_RETRY_DELAY = 5
 REMOTE_PHONES_PATH = "/root/pnj_thantai/phones.txt"
-# Bắt đầu từ file phones_48.txt (VPS 1 = phones_48, VPS 40 = phones_87)
-START_PHONE_NUM = 48
-# 6 link roadshow (MBC, MTG, TNN, DNB, HCM, MTY) – VPS i dùng (i-1) % 6
-NUM_BASE_URLS = 6
+# Bắt đầu từ file phones_88.txt, tối đa phones_200.txt (VPS 1 = phones_88, VPS 113 = phones_200)
+START_PHONE_NUM = 249
+END_PHONE_NUM = 500
 
 print_lock = threading.Lock()
 
@@ -91,7 +91,7 @@ def deploy_one(args: tuple) -> tuple[int, str, bool, list[str]]:
     Trả về (index, ip, ok, list_message).
     """
     idx, ip, password, api_key = args
-    file_idx = START_PHONE_NUM + (idx - 1)  # VPS 1 = phones_48, VPS 40 = phones_87
+    file_idx = START_PHONE_NUM + (idx - 1)  # VPS 1 = phones_88, VPS 113 = phones_200
     label = f"VPS {file_idx} - {ip}"
     local_phones = DIR / f"phones_{file_idx}.txt"
     messages = []
@@ -116,11 +116,26 @@ def deploy_one(args: tuple) -> tuple[int, str, bool, list[str]]:
         # --- BƯỚC 1: Cài đặt (retry đến khi stdout chứa "=== Deploy xong ===") ---
         messages.append("Đang cài đặt...")
         install_ok = False
+        kill_cmd = (
+            "screen -S pnj -X quit 2>/dev/null || true; "
+            "pkill -f 'run_16gb.sh|start_pnj.sh|main.py.*pnj' 2>/dev/null || true"
+        )
+        local_deploy_sh = DIR / "deploy_vps.sh"
+        use_local_deploy = local_deploy_sh.is_file()
         for attempt in range(1, MAX_INSTALL_ATTEMPTS + 1):
-            stdin, stdout, stderr = client.exec_command(
-                f"curl -sL {DEPLOY_SCRIPT_URL} | bash",
-                timeout=600,
-            )
+            # Kill process/screen cũ trước mỗi lần thử để retry sạch
+            _, so, se = client.exec_command(kill_cmd, timeout=5)
+            so.channel.recv_exit_status()
+            if use_local_deploy:
+                sftp_install = client.open_sftp()
+                sftp_install.put(str(local_deploy_sh), "/tmp/deploy_vps.sh")
+                sftp_install.close()
+                stdin, stdout, stderr = client.exec_command("bash /tmp/deploy_vps.sh", timeout=900)
+            else:
+                stdin, stdout, stderr = client.exec_command(
+                    f"curl -sL {DEPLOY_SCRIPT_URL} | bash",
+                    timeout=900,
+                )
             out = stdout.read().decode("utf-8", errors="replace")
             err = stderr.read().decode("utf-8", errors="replace")
             code = stdout.channel.recv_exit_status()
@@ -135,6 +150,16 @@ def deploy_one(args: tuple) -> tuple[int, str, bool, list[str]]:
 
         if not install_ok:
             messages.append(f"Cài đặt thất bại sau {MAX_INSTALL_ATTEMPTS} lần (không thấy '{SUCCESS_MARKER}').")
+            # Ghi log lỗi để kiểm tra (stdout/stderr lần thử cuối)
+            log_file = DIR / f"failed_deploy_{ip.replace('.', '_')}.txt"
+            try:
+                log_file.write_text(
+                    f"=== stdout (lần thử cuối) ===\n{out}\n\n=== stderr ===\n{err}",
+                    encoding="utf-8",
+                )
+                messages.append(f"Đã ghi log: {log_file.name}")
+            except Exception:
+                pass
             client.close()
             return (idx, ip, False, messages)
 
@@ -144,13 +169,15 @@ def deploy_one(args: tuple) -> tuple[int, str, bool, list[str]]:
         sftp.close()
         messages.append(f"Đã upload file phones_{file_idx}.txt")
 
-        # --- BƯỚC 3: Chạy tool (BASE_URL_INDEX để config.py chọn đúng link) ---
-        url_index = (idx - 1) % NUM_BASE_URLS
+        # --- BƯỚC 3: Kill nếu đã chạy rồi, rồi khởi động lại tool ---
         safe_key = escape_bash_single(api_key)
         cmd = (
+            "screen -S pnj -X quit 2>/dev/null || true; "
+            "pkill -f 'run_16gb.sh|start_pnj.sh|main.py.*pnj' 2>/dev/null || true; "
+            "cd ~/pnj_thantai && "
             f"export TMPROXY_API_KEY='{safe_key}' && "
-            f"export BASE_URL_INDEX='{url_index}' && "
-            "cd ~/pnj_thantai && bash start_pnj.sh"
+            "export BASE_URL='https://thantai.pnj.com.vn/' && "
+            "bash start_pnj.sh"
         )
         stdin, stdout, stderr = client.exec_command(cmd, timeout=30)
         stdout.channel.recv_exit_status()
@@ -168,10 +195,21 @@ def deploy_one(args: tuple) -> tuple[int, str, bool, list[str]]:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Deploy PNJ Thần Tài lên N VPS (đa luồng)")
+    parser.add_argument(
+        "-w", "--workers",
+        type=int,
+        default=50,
+        help="Số VPS deploy đồng thời (mặc định: 50, tăng để nhanh hơn)",
+    )
+    args = parser.parse_args()
+    workers = max(1, min(args.workers, 100))
+
     servers = load_servers(NEW_SERVERS_FILE)
     keys = load_keys(NEW_KEYS_FILE)
 
-    n = min(len(servers), len(keys))
+    max_vps = END_PHONE_NUM - START_PHONE_NUM + 1  # 88..200 = 113 VPS
+    n = min(len(servers), len(keys), max_vps)
     if n == 0:
         print(f"[!] Chưa có dữ liệu trong {NEW_SERVERS_FILE} hoặc {NEW_KEYS_FILE}")
         sys.exit(1)
@@ -184,10 +222,11 @@ def main():
 
     last_file = START_PHONE_NUM + n - 1
     print(f"[*] Đang deploy {n} VPS (phones_{START_PHONE_NUM}.txt .. phones_{last_file}.txt)...")
+    print(f"[*] Số luồng đồng thời: {min(n, workers)}")
     print()
 
     ok_count = 0
-    with ThreadPoolExecutor(max_workers=min(n, 20)) as ex:
+    with ThreadPoolExecutor(max_workers=min(n, workers)) as ex:
         futures = {ex.submit(deploy_one, t): t for t in tasks}
         for fut in as_completed(futures):
             idx, ip, ok, messages = fut.result()

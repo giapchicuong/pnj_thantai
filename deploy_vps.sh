@@ -18,12 +18,14 @@ echo ""
 echo "[1/8] Cập nhật hệ thống..."
 sudo apt update -qq && sudo apt upgrade -y -qq
 
-# 2. Cài gói hệ thống
+# 2. Cài gói hệ thống (tương thích Ubuntu 20.04 và 24.04)
 echo "[2/8] Cài gói hệ thống..."
 sudo apt install -y -qq \
   git wget curl unzip screen \
   tesseract-ocr tesseract-ocr-vie \
-  libgl1-mesa-glx libglib2.0-0 libnss3 libxss1 libgbm1 libasound2
+  libglib2.0-0 libnss3 libxss1 libgbm1
+sudo apt install -y -qq libgl1-mesa-glx libasound2 2>/dev/null || \
+  sudo apt install -y -qq libgl1 libasound2t64 2>/dev/null || true
 
 # 3. Cài Google Chrome
 echo "[3/8] Cài Google Chrome..."
@@ -55,7 +57,13 @@ echo "[6/8] Tạo môi trường Python 3.11..."
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
 conda create -n pnj311 python=3.11 -y 2>/dev/null || true
-source "$HOME/miniconda3/bin/activate" pnj311
+# Miniconda mới dùng conda.sh, không còn bin/activate
+if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+  source "$HOME/miniconda3/etc/profile.d/conda.sh"
+  conda activate pnj311
+else
+  source "$HOME/miniconda3/bin/activate" pnj311
+fi
 
 # 7. Clone repo và cài Python packages
 echo "[7/8] Clone repo và cài packages..."

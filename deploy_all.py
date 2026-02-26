@@ -8,7 +8,7 @@ Chạy trên máy local: python deploy_all.py
   - keys.txt: mỗi dòng 1 TMProxy API key (key thứ i ghép với VPS thứ i)
 
 Trên máy local cần có phones_1.txt .. phones_40.txt; script upload phones_{i}.txt lên từng VPS thành phones.txt.
-Mỗi VPS i dùng link roadshow (MBC/MTG/TNN/DNB/HCM/MTY) theo (i-1) % 6 (config.py BASE_URL_INDEX).
+Tất cả VPS dùng 1 link: https://thantai.pnj.com.vn/ (config.py đọc từ env BASE_URL).
 
 Cài đặt: pip install paramiko
 """
@@ -32,7 +32,6 @@ SERVERS_FILE = DIR / "servers.txt"
 KEYS_FILE = DIR / "keys.txt"
 USER = "root"
 MAX_WORKERS = 15  # SSH đa luồng (10–20), giảm nếu gặp "Connection reset by peer"
-NUM_BASE_URLS = 6  # 40 VPS chia đều 6 link: BASE_URL_INDEX = (idx-1) % 6
 SSH_RETRIES = 3  # Số lần thử lại khi SSH lỗi (banner / connection reset)
 SSH_RETRY_DELAY = 2  # Giây chờ giữa mỗi lần retry
 
@@ -81,7 +80,6 @@ def deploy_one(args: tuple) -> tuple[int, str, str, bool, str]:
     """
     idx, ip, password, api_key = args
     label = f"VPS {idx} - {ip}"
-    url_index = (idx - 1) % NUM_BASE_URLS  # Chia đều 6 link (MBC, MTG, TNN, DNB, HCM, MTY)
     local_phones = DIR / f"phones_{idx}.txt"
     if not local_phones.is_file():
         return (idx, ip, label, False, f"Không tìm thấy file local: phones_{idx}.txt")
@@ -110,7 +108,7 @@ def deploy_one(args: tuple) -> tuple[int, str, str, bool, str]:
                 "screen -S pnj -X quit 2>/dev/null || true; "
                 "cd ~/pnj_thantai && "
                 f"export TMPROXY_API_KEY='{safe_key}' && "
-                f"export BASE_URL_INDEX='{url_index}' && "
+                "export BASE_URL='https://thantai.pnj.com.vn/' && "
                 "bash start_pnj.sh"
             )
             stdin, stdout, stderr = client.exec_command(cmd, timeout=30)
@@ -149,7 +147,7 @@ def main():
         print("    Mỗi dòng 1 TMProxy API key")
         sys.exit(1)
 
-    n = min(len(servers), len(keys), 40)
+    n = min(len(servers), len(keys), 87)
     if n < len(servers) or n < len(keys):
         print(f"[*] Dùng {n} cặp (servers: {len(servers)}, keys: {len(keys)})")
 

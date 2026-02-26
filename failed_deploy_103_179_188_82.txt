@@ -1,0 +1,31 @@
+=== stdout (lần thử cuối) ===
+=== Deploy PNJ Thần Tài ===
+  Workers: 5 (phù hợp 16GB RAM)
+  Thư mục: /root/pnj_thantai
+
+[1/8] Cập nhật hệ thống...
+All packages are up to date.
+0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+[2/8] Cài gói hệ thống...
+Package libasound2 is a virtual package provided by:
+  liboss4-salsa-asound2 4.2-build2020-1ubuntu3.1
+  libasound2t64 1.2.11-1ubuntu0.2 (= 1.2.11-1ubuntu0.2)
+
+Package libgl1-mesa-glx is not available, but is referred to by another package.
+This may mean that the package is missing, has been obsoleted, or
+is only available from another source
+
+
+
+=== stderr ===
+
+WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+
+
+WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+
+
+WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+
+E: Package 'libgl1-mesa-glx' has no installation candidate
+E: Package 'libasound2' has no installation candidate

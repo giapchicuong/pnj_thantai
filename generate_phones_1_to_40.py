@@ -9,7 +9,7 @@ import random
 DIR = Path(__file__).parent
 PHONES_200K = DIR / "phones_200k.txt"
 PHONES_ACA = DIR / "phones_aca.txt"
-NUM_FILES = 40
+NUM_FILES = 300
 # Xác suất đổi 1 chữ số ngẫu nhiên trong mỗi số (0 = giữ nguyên)
 MUTATE_PROB = 0.25
 

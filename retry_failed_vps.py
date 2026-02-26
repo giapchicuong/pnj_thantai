@@ -2,7 +2,7 @@
 """
 Chạy lại deploy cho các VPS đã lỗi (dùng chung new_servers.txt, new_keys.txt).
 Retry liên tục đến khi tất cả thành công.
-Dùng cùng START_PHONE_NUM với deploy_new_7_vps (48 → phones_48..87).
+Dùng cùng START_PHONE_NUM/END_PHONE_NUM với deploy_new_7_vps (88 → phones_88..200).
 """
 from pathlib import Path
 import sys
@@ -17,6 +17,7 @@ from deploy_new_7_vps import (
     NEW_SERVERS_FILE,
     NEW_KEYS_FILE,
     START_PHONE_NUM,
+    END_PHONE_NUM,
 )
 
 DIR = Path(__file__).parent
@@ -25,7 +26,7 @@ RETRY_DELAY_SEC = 3
 
 
 def load_retry_list(path: Path) -> list[int]:
-    """Đọc danh sách số VPS (48–87 tương ứng phones_48..87), mỗi dòng 1 số."""
+    """Đọc danh sách số VPS (88–200 tương ứng phones_88..200), mỗi dòng 1 số."""
     if not path.exists():
         return []
     out = []
@@ -35,7 +36,7 @@ def load_retry_list(path: Path) -> list[int]:
             continue
         try:
             n = int(line)
-            if START_PHONE_NUM <= n <= 127 and n not in out:
+            if START_PHONE_NUM <= n <= END_PHONE_NUM and n not in out:
                 out.append(n)
         except ValueError:
             continue
@@ -46,7 +47,7 @@ def main():
     vps_numbers = load_retry_list(RETRY_LIST_FILE)
     if not vps_numbers:
         print(f"[!] Chưa có số VPS trong {RETRY_LIST_FILE}")
-        print(f"    Mỗi dòng 1 số từ {START_PHONE_NUM} trở đi (ví dụ: 48, 50, 87)")
+        print(f"    Mỗi dòng 1 số từ {START_PHONE_NUM} tới {END_PHONE_NUM} (ví dụ: 88, 90, 200)")
         sys.exit(1)
 
     servers = load_servers(NEW_SERVERS_FILE)
@@ -58,7 +59,7 @@ def main():
 
     tasks = []
     for vps_num in vps_numbers:
-        idx = vps_num - START_PHONE_NUM + 1  # 48 -> 1, 87 -> 40
+        idx = vps_num - START_PHONE_NUM + 1  # 88 -> 1, 200 -> 113
         if idx < 1 or idx > n_max:
             print(f"[!] Bỏ qua {vps_num}: nằm ngoài phạm vi (1–{n_max} tương ứng phones_{START_PHONE_NUM}..{START_PHONE_NUM + n_max - 1})")
             continue
@@ -76,7 +77,7 @@ def main():
         if round_num > 1:
             print()
             time.sleep(RETRY_DELAY_SEC)
-        labels = [f"VPS {40 + t[0]} - {t[1]}" for t in tasks]
+        labels = [f"VPS {START_PHONE_NUM + t[0] - 1} - {t[1]}" for t in tasks]
         print(f"[*] Đang thử lại {len(tasks)} VPS lỗi (vòng {round_num}): {', '.join(labels)}")
         print()
 

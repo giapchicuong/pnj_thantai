@@ -12,8 +12,12 @@ BASE_URLS = [
     "https://thantai.pnj.com.vn?utm_type=roadshow&utm_source=HCM&utm_medium=roadshow&utm_campaign=gameXTT26&utm_content=HCM_roadshow_HO",
     "https://thantai.pnj.com.vn?utm_type=roadshow&utm_source=MTY&utm_medium=roadshow&utm_campaign=gameXTT26&utm_content=MTY_roadshow_HO",
 ]
-_URL_INDEX = int(os.environ.get("BASE_URL_INDEX", "0")) % len(BASE_URLS)
-BASE_URL = BASE_URLS[_URL_INDEX]
+_BASE_URL_ENV = os.environ.get("BASE_URL", "").strip()
+if _BASE_URL_ENV:
+    BASE_URL = _BASE_URL_ENV
+else:
+    _URL_INDEX = int(os.environ.get("BASE_URL_INDEX", "0")) % len(BASE_URLS)
+    BASE_URL = BASE_URLS[_URL_INDEX]
 BASE_ORIGIN = "https://thantai.pnj.com.vn"
 
 # Các selector - dựa trên HTML thực tế
@@ -57,7 +61,7 @@ WAIT_AFTER_SPIN = 8
 WAIT_FOR_POPUP_MAX = 25
 WAIT_FOR_NEXT_SPIN = 30
 
-NUM_WORKERS = 1  # Khuyến nghị ổn định trên VPS Linux (tránh crash Chrome đa luồng)
+NUM_WORKERS = 3  # 3 luồng đồng thời (đã bỏ Cloudflare, không cần proxy)
 SUMMARY_INTERVAL = 120
 MAX_RETRY_PER_PHONE = 3  # Retry tối đa mỗi SĐT khi lỗi (tránh loop vô hạn)
 MAX_IP_ROTATE_PER_PHONE = 5  # Đổi IP tối đa mỗi SĐT khi bị chặn (quit + tạo driver mới)

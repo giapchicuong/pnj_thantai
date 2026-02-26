@@ -56,17 +56,16 @@ from config import (
 )
 from captcha_solver import solve_captcha_from_bytes
 
-# TMProxy API — đọc từ env để mỗi VPS dùng key riêng, tránh bị ghi đè khi git pull
-TMPROXY_API_KEY = os.environ.get(
-    "TMPROXY_API_KEY",
-    "fb8c30dd6b2e62d26b0bde004c09fe34",
-)
+# TMProxy API — đã bỏ Cloudflare, mặc định không dùng proxy. Set env TMPROXY_API_KEY nếu cần.
+TMPROXY_API_KEY = (os.environ.get("TMPROXY_API_KEY") or "").strip()
 TMPROXY_GET_CURRENT = "https://tmproxy.com/api/proxy/get-current-proxy"
 TMPROXY_GET_NEW = "https://tmproxy.com/api/proxy/get-new-proxy"
 
 
 def get_tmproxy(force_new: bool = False) -> Optional[str]:
-    """Lấy proxy từ TMProxy. Không bao giờ trả về None — vòng lặp đến khi lấy được proxy."""
+    """Lấy proxy từ TMProxy. Nếu không có TMPROXY_API_KEY (đã bỏ Cloudflare) thì trả về None (không dùng proxy)."""
+    if not (TMPROXY_API_KEY or "").strip():
+        return None
     while True:
         if not force_new:
             try:
