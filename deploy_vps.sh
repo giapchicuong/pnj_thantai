@@ -40,30 +40,38 @@ echo "[4/8] Tăng /dev/shm lên 2GB..."
 sudo mount -o remount,size=2G /dev/shm 2>/dev/null || true
 df -h /dev/shm | tail -1
 
-# 5. Cài Miniconda
+# 5. Cài Miniconda (đảm bảo conda chạy được; cài lại nếu thư mục có nhưng conda không có)
 echo "[5/8] Cài Miniconda..."
-if [ ! -d "$HOME/miniconda3" ]; then
+install_miniconda() {
   wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh
   bash /tmp/miniconda.sh -b -p "$HOME/miniconda3"
   rm -f /tmp/miniconda.sh
   echo 'export PATH="$HOME/miniconda3/bin:$PATH"' >> "$HOME/.bashrc"
+}
+if [ ! -d "$HOME/miniconda3" ]; then
+  install_miniconda
 fi
 export PATH="$HOME/miniconda3/bin:$PATH"
+if ! command -v conda &>/dev/null; then
+  echo "  Miniconda chưa dùng được, cài lại..."
+  rm -rf "$HOME/miniconda3"
+  install_miniconda
+  export PATH="$HOME/miniconda3/bin:$PATH"
+fi
+CONDA_EXE="$HOME/miniconda3/bin/conda"
 
-# 6. Chấp nhận Conda ToS và tạo env
+# 6. Chấp nhận Conda ToS và tạo env (dùng đường dẫn đầy đủ)
 echo "[6/8] Tạo môi trường Python..."
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
-# Xóa env cũ nếu tồn tại (tránh trạng thái lỗi)
-conda env remove -n pnj311 -y 2>/dev/null || true
-# Ưu tiên conda-forge (ít lỗi "Solving environment: failed" hơn repo mặc định)
-if conda create -n pnj311 python=3.10 -y -c conda-forge --override-channels; then
+"$CONDA_EXE" tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
+"$CONDA_EXE" tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
+"$CONDA_EXE" env remove -n pnj311 -y 2>/dev/null || true
+if "$CONDA_EXE" create -n pnj311 python=3.10 -y -c conda-forge --override-channels; then
   echo "  Đã tạo env với Python 3.10 (conda-forge)."
-elif conda create -n pnj311 python=3.10 -y; then
+elif "$CONDA_EXE" create -n pnj311 python=3.10 -y; then
   echo "  Đã tạo env với Python 3.10."
 else
   echo "  Thử Python 3.11..."
-  conda create -n pnj311 python=3.11 -y
+  "$CONDA_EXE" create -n pnj311 python=3.11 -y
 fi
 source "$HOME/miniconda3/bin/activate" pnj311
 
