@@ -10,6 +10,7 @@ REPO_URL="https://github.com/giapchicuong/pnj_thantai.git"
 INSTALL_DIR="$HOME/pnj_thantai"
 
 echo "=== Deploy PNJ Thần Tài ==="
+echo "  (script dùng CONDA_EXE full path, cài lại Miniconda nếu lỗi)"
 echo "  Workers: $WORKERS (phù hợp 16GB RAM)"
 echo "  Thư mục: $INSTALL_DIR"
 echo ""
@@ -103,15 +104,15 @@ if [ ! -s "$INSTALL_DIR/phones.txt" ]; then
   echo "  [!] phones.txt trống - nhớ thêm SĐT vào file này!"
 fi
 
-# Tạo script chạy cho instance 16GB
+# Tạo script chạy cho instance 16GB (1 luồng ổn định, tránh Cloudflare/Chrome lỗi)
 cat > "$INSTALL_DIR/run_16gb.sh" << 'RUNSCRIPT'
 #!/bin/bash
-# Chạy 3 workers (ổn định cho 16GB RAM)
+# Chạy 1 worker (ổn định, tránh Cloudflare timeout đa luồng)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate pnj311
 cd "$SCRIPT_DIR"
-python main.py --workers 3 --headless --continuous --reload-interval 60 "$@"
+python main.py --workers 1 --headless --continuous --reload-interval 60 "$@"
 RUNSCRIPT
 chmod +x "$INSTALL_DIR/run_16gb.sh"
 
