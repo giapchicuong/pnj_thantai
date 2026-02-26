@@ -55,17 +55,7 @@ echo "[6/8] Tạo môi trường Python 3.11..."
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
 conda create -n pnj311 python=3.11 -y 2>/dev/null || true
-CONDA_ENV_BIN="$HOME/miniconda3/envs/pnj311/bin"
-if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
-  source "$HOME/miniconda3/etc/profile.d/conda.sh"
-  conda activate pnj311
-elif [ -f "$HOME/miniconda3/bin/activate" ]; then
-  source "$HOME/miniconda3/bin/activate" pnj311
-elif [ -d "$CONDA_ENV_BIN" ]; then
-  export PATH="$CONDA_ENV_BIN:$PATH"
-else
-  eval "$(conda shell.bash hook 2>/dev/null)" && conda activate pnj311
-fi
+source "$HOME/miniconda3/bin/activate" pnj311
 
 # 7. Clone repo và cài Python packages
 echo "[7/8] Clone repo và cài packages..."
@@ -93,14 +83,8 @@ cat > "$INSTALL_DIR/run_16gb.sh" << 'RUNSCRIPT'
 #!/bin/bash
 # Chạy 3 workers (ổn định cho 16GB RAM)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-E="$HOME/miniconda3/envs/pnj311/bin"
-if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
-  source "$HOME/miniconda3/etc/profile.d/conda.sh" && conda activate pnj311
-elif [ -d "$E" ]; then
-  export PATH="$E:$PATH"
-else
-  eval "$(conda shell.bash hook 2>/dev/null)" && conda activate pnj311
-fi
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate pnj311
 cd "$SCRIPT_DIR"
 python main.py --workers 3 --headless --continuous --reload-interval 60 "$@"
 RUNSCRIPT
