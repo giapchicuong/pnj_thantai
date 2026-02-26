@@ -1,29 +1,44 @@
 #!/bin/bash
 # Script deploy PNJ Thần Tài lên VPS Ubuntu 20.04
-# Dùng cho instance 16GB RAM - chạy 3 workers (ổn định)
-# Chạy: bash deploy_vps.sh
-# Hoặc: WORKERS=5 bash deploy_vps.sh
+# Chạy 1 worker, không proxy. Chạy: bash deploy_vps.sh
 
 set -e
-WORKERS=${WORKERS:-5}
+WORKERS=1
 REPO_URL="https://github.com/giapchicuong/pnj_thantai.git"
 INSTALL_DIR="$HOME/pnj_thantai"
 
 echo "=== Deploy PNJ Thần Tài ==="
-echo "  Workers: $WORKERS (phù hợp 16GB RAM)"
+echo "  Workers: $WORKERS"
 echo "  Thư mục: $INSTALL_DIR"
 echo ""
+
+# 0. Đợi dpkg/apt lock (tránh lỗi "Unable to acquire the dpkg frontend lock")
+echo "[0/8] Đợi dpkg sẵn sàng..."
+WAIT_MAX=24
+i=0
+while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+  i=$((i + 1))
+  if [ "$i" -ge "$WAIT_MAX" ]; then
+    echo "  [!] Timeout đợi dpkg lock (2 phút). Thoát."
+    exit 1
+  fi
+  echo "  Đợi lock apt/dpkg... (${i}/${WAIT_MAX})"
+  sleep 5
+done
+echo "  Dpkg sẵn sàng."
 
 # 1. Cập nhật hệ thống
 echo "[1/8] Cập nhật hệ thống..."
 sudo apt update -qq && sudo apt upgrade -y -qq
 
-# 2. Cài gói hệ thống
+# 2. Cài gói hệ thống (tương thích Ubuntu 20/24)
 echo "[2/8] Cài gói hệ thống..."
 sudo apt install -y -qq \
   git wget curl unzip screen \
   tesseract-ocr tesseract-ocr-vie \
-  libgl1-mesa-glx libglib2.0-0 libnss3 libxss1 libgbm1 libasound2
+  libglib2.0-0 libnss3 libxss1 libgbm1
+sudo apt install -y -qq libgl1-mesa-glx libasound2 2>/dev/null || \
+  sudo apt install -y -qq libgl1 libasound2t64 2>/dev/null || true
 
 # 3. Cài Google Chrome
 echo "[3/8] Cài Google Chrome..."
@@ -55,7 +70,12 @@ echo "[6/8] Tạo môi trường Python 3.11..."
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
 conda create -n pnj311 python=3.11 -y 2>/dev/null || true
-source "$HOME/miniconda3/bin/activate" pnj311
+if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+  source "$HOME/miniconda3/etc/profile.d/conda.sh"
+  conda activate pnj311
+else
+  source "$HOME/miniconda3/bin/activate" pnj311
+fi
 
 # 7. Clone repo và cài Python packages
 echo "[7/8] Clone repo và cài packages..."
@@ -78,15 +98,14 @@ if [ ! -s "$INSTALL_DIR/phones.txt" ]; then
   echo "  [!] phones.txt trống - nhớ thêm SĐT vào file này!"
 fi
 
-# Tạo script chạy cho instance 16GB
+# Tạo script chạy (1 worker)
 cat > "$INSTALL_DIR/run_16gb.sh" << 'RUNSCRIPT'
 #!/bin/bash
-# Chạy 3 workers (ổn định cho 16GB RAM)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate pnj311
 cd "$SCRIPT_DIR"
-python main.py --workers 3 --headless --continuous --reload-interval 60 "$@"
+python main.py --workers 1 --headless --continuous --reload-interval 60 "$@"
 RUNSCRIPT
 chmod +x "$INSTALL_DIR/run_16gb.sh"
 
