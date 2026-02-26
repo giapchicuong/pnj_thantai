@@ -27,9 +27,11 @@ while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/
 done
 echo "  Dpkg sẵn sàng."
 
-# 1. Cập nhật hệ thống
+# 1. Cập nhật hệ thống (không thoát script dù apt lỗi / Ubuntu Pro / mirror)
 echo "[1/8] Cập nhật hệ thống..."
-sudo apt update -qq && sudo apt upgrade -y -qq
+sudo apt update -qq 2>/dev/null || true
+sudo DEBIAN_FRONTEND=noninteractive apt upgrade -y -qq 2>/dev/null || true
+sudo apt autoremove -y -qq 2>/dev/null || true
 
 # 2. Cài gói hệ thống (tương thích Ubuntu 20/24)
 echo "[2/8] Cài gói hệ thống..."
