@@ -59,6 +59,13 @@ if ! command -v conda &>/dev/null; then
   export PATH="$HOME/miniconda3/bin:$PATH"
 fi
 CONDA_EXE="$HOME/miniconda3/bin/conda"
+if [ ! -x "$CONDA_EXE" ]; then
+  echo "  Conda không tồn tại hoặc không chạy được, cài lại Miniconda..."
+  rm -rf "$HOME/miniconda3"
+  install_miniconda
+  export PATH="$HOME/miniconda3/bin:$PATH"
+  CONDA_EXE="$HOME/miniconda3/bin/conda"
+fi
 
 # 6. Chấp nhận Conda ToS và tạo env (dùng đường dẫn đầy đủ)
 echo "[6/8] Tạo môi trường Python..."
