@@ -54,16 +54,16 @@ export PATH="$HOME/miniconda3/bin:$PATH"
 echo "[6/8] Tạo môi trường Python..."
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
-# Dùng libmamba solver nếu có (giảm lỗi Solving environment: failed)
-conda install -n base conda-libmamba-solver -y 2>/dev/null && conda config --set solver libmamba 2>/dev/null || true
-# Tạo env: thử 3.11 -> 3.10 (default) -> 3.10 conda-forge
-if conda create -n pnj311 python=3.11 -y; then
-  echo "  Đã tạo env với Python 3.11."
+# Xóa env cũ nếu tồn tại (tránh trạng thái lỗi)
+conda env remove -n pnj311 -y 2>/dev/null || true
+# Ưu tiên conda-forge (ít lỗi "Solving environment: failed" hơn repo mặc định)
+if conda create -n pnj311 python=3.10 -y -c conda-forge --override-channels; then
+  echo "  Đã tạo env với Python 3.10 (conda-forge)."
 elif conda create -n pnj311 python=3.10 -y; then
   echo "  Đã tạo env với Python 3.10."
 else
-  echo "  Thử với conda-forge..."
-  conda create -n pnj311 python=3.10 -y -c conda-forge --override-channels
+  echo "  Thử Python 3.11..."
+  conda create -n pnj311 python=3.11 -y
 fi
 source "$HOME/miniconda3/bin/activate" pnj311
 
